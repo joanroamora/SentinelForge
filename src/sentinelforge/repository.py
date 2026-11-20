@@ -12,8 +12,9 @@ from pathlib import Path
 from uuid import uuid4
 
 from .contracts import AnalysisReport, ReportRevision
+from .workflow import WorkflowCheckpoint, WorkflowConflictError, next_checkpoint
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 DEFAULT_DATABASE_PATH = Path(".sentinelforge/analyses.sqlite3")
 
 
@@ -47,7 +48,7 @@ class SQLiteReportRepository:
         version = connection.execute("PRAGMA user_version").fetchone()[0]
         if version == SCHEMA_VERSION:
             return
-        if version != 0:
+        if version not in (0, 1):
             raise RuntimeError(f"unsupported_database_schema_version:{version}")
 
         connection.execute("BEGIN IMMEDIATE")
@@ -113,6 +114,28 @@ class SQLiteReportRepository:
                     END
                     """
                 )
+                version = 1
+            if version == 1:
+                connection.execute(
+                    """
+                    CREATE TABLE workflow_checkpoints (
+                        analysis_id TEXT NOT NULL,
+                        version INTEGER NOT NULL CHECK (version > 0),
+                        checkpoint_json TEXT NOT NULL,
+                        PRIMARY KEY (analysis_id, version)
+                    )
+                    """
+                )
+                for operation in ("UPDATE", "DELETE"):
+                    connection.execute(
+                        f"""
+                        CREATE TRIGGER workflow_checkpoints_no_{operation.lower()}
+                        BEFORE {operation} ON workflow_checkpoints
+                        BEGIN
+                            SELECT RAISE(ABORT, 'workflow_checkpoints_are_immutable');
+                        END
+                        """
+                    )
                 connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             elif version != SCHEMA_VERSION:
                 raise RuntimeError(f"unsupported_database_schema_version:{version}")
@@ -151,42 +174,137 @@ class SQLiteReportRepository:
                     raise ReportConflictError("report_revision_conflict")
 
                 next_revision = current_revision + 1
-                occurred_at = datetime.now(UTC).isoformat()
-                event_type = (
-                    "report_created" if next_revision == 1 else "report_revision_created"
-                )
-
-                connection.execute(
-                    """
-                    INSERT INTO report_revisions
-                        (analysis_id, revision, report_json, created_at)
-                    VALUES (?, ?, ?, ?)
-                    """,
-                    (
-                        analysis_id,
-                        next_revision,
-                        report_json,
-                        occurred_at,
-                    ),
-                )
-                connection.execute(
-                    """
-                    INSERT INTO analysis_events
-                        (event_id, analysis_id, event_type, occurred_at, payload_json)
-                    VALUES (?, ?, ?, ?, ?)
-                    """,
-                    (
-                        str(uuid4()),
-                        analysis_id,
-                        event_type,
-                        occurred_at,
-                        json.dumps(
-                            {"revision": next_revision}, separators=(",", ":")
-                        ),
-                    ),
-                )
+                self._insert_report_revision(connection, report, next_revision)
                 connection.commit()
                 return next_revision
+            except Exception:
+                connection.rollback()
+                raise
+
+    @staticmethod
+    def _append_event(
+        connection: sqlite3.Connection,
+        analysis_id: str,
+        event_type: str,
+        payload: dict[str, str | int],
+    ) -> None:
+        connection.execute(
+            """
+            INSERT INTO analysis_events
+                (event_id, analysis_id, event_type, occurred_at, payload_json)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (str(uuid4()), analysis_id, event_type, datetime.now(UTC).isoformat(),
+             json.dumps(payload, separators=(",", ":"))),
+        )
+
+    def _insert_report_revision(
+        self, connection: sqlite3.Connection, report: AnalysisReport, revision: int
+    ) -> None:
+        workflow = self._read_checkpoint(connection, report.analysis.id)
+        if workflow is not None and workflow.state != "COMPLETED":
+            raise WorkflowConflictError("workflow_report_not_ready")
+        connection.execute(
+            """
+            INSERT INTO report_revisions (analysis_id, revision, report_json, created_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (report.analysis.id, revision, report.model_dump_json(), datetime.now(UTC).isoformat()),
+        )
+        self._append_event(
+            connection, report.analysis.id,
+            "report_created" if revision == 1 else "report_revision_created",
+            {"revision": revision},
+        )
+
+    @staticmethod
+    def _read_checkpoint(
+        connection: sqlite3.Connection, analysis_id: str, version: int | None = None
+    ) -> WorkflowCheckpoint | None:
+        row = connection.execute(
+            """
+            SELECT checkpoint_json FROM workflow_checkpoints
+            WHERE analysis_id = ? AND (? IS NULL OR version = ?)
+            ORDER BY version DESC LIMIT 1
+            """,
+            (analysis_id, version, version),
+        ).fetchone()
+        return None if row is None else WorkflowCheckpoint.model_validate_json(row[0])
+
+    def _insert_checkpoint(
+        self, connection: sqlite3.Connection, checkpoint: WorkflowCheckpoint
+    ) -> None:
+        connection.execute(
+            "INSERT INTO workflow_checkpoints VALUES (?, ?, ?)",
+            (checkpoint.analysis_id, checkpoint.version, checkpoint.model_dump_json()),
+        )
+        self._append_event(
+            connection, checkpoint.analysis_id,
+            "workflow_created" if checkpoint.version == 1 else "workflow_advanced",
+            {"schema_version": "1.0", "version": checkpoint.version, "state": checkpoint.state},
+        )
+
+    def create_workflow(self, checkpoint: WorkflowCheckpoint) -> None:
+        if checkpoint.version != 1:
+            raise WorkflowConflictError("workflow_must_start_at_received")
+        with self._connection() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                existing = self._read_checkpoint(connection, checkpoint.analysis_id, 1)
+                if existing is not None:
+                    if existing != checkpoint:
+                        raise WorkflowConflictError("workflow_id_conflict")
+                else:
+                    report_exists = connection.execute(
+                        "SELECT 1 FROM report_revisions WHERE analysis_id = ? LIMIT 1",
+                        (checkpoint.analysis_id,),
+                    ).fetchone()
+                    if report_exists:
+                        raise WorkflowConflictError("workflow_id_conflict")
+                    self._insert_checkpoint(connection, checkpoint)
+                connection.commit()
+            except Exception:
+                connection.rollback()
+                raise
+
+    def get_workflow(self, analysis_id: str) -> WorkflowCheckpoint | None:
+        with self._connection() as connection:
+            return self._read_checkpoint(connection, analysis_id)
+
+    def advance_workflow(
+        self, analysis_id: str, *, expected_version: int,
+        final_report: AnalysisReport | None = None,
+    ) -> WorkflowCheckpoint:
+        with self._connection() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                current = self._read_checkpoint(connection, analysis_id)
+                if current is None:
+                    raise LookupError("analysis_workflow_not_found")
+                if type(expected_version) is not int or expected_version < 1:
+                    raise WorkflowConflictError("workflow_version_conflict")
+                if expected_version < current.version:
+                    replay = self._read_checkpoint(connection, analysis_id, expected_version + 1)
+                    if replay is None:
+                        raise WorkflowConflictError("workflow_checkpoint_missing")
+                    connection.commit()
+                    return replay
+                if expected_version != current.version:
+                    raise WorkflowConflictError("workflow_version_conflict")
+                advanced = next_checkpoint(current)
+                if advanced != current:
+                    self._insert_checkpoint(connection, advanced)
+                    if advanced.state == "COMPLETED":
+                        if (
+                            final_report is None
+                            or final_report.analysis.id != analysis_id
+                            or final_report.analysis.status != "COMPLETED"
+                            or final_report.analysis.created_at != current.created_at
+                        ):
+                            raise ValueError("workflow_final_report_required")
+                        self._insert_report_revision(connection, final_report, 1)
+                connection.commit()
+                return advanced
             except Exception:
                 connection.rollback()
                 raise

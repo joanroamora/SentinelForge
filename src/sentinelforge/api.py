@@ -10,6 +10,7 @@ from .contracts import AnalysisReport, DemoRevisionRequest, ReportRevision
 from .repository import ReportConflictError
 from .service import AnalysisService
 from .web import WEB_PAGE
+from .workflow import WorkflowAdvanceRequest, WorkflowCheckpoint, WorkflowConflictError
 
 
 def create_app(
@@ -77,6 +78,30 @@ def create_app(
             raise HTTPException(status_code=404, detail="analysis_not_found") from error
         except ReportConflictError as error:
             raise HTTPException(status_code=409, detail="report_revision_conflict") from error
+
+    @app.post("/v1/demo-workflows", response_model=WorkflowCheckpoint, status_code=201)
+    def start_workflow() -> WorkflowCheckpoint:
+        return app.state.analysis_service.create_demo_workflow()
+
+    @app.get("/v1/demo-workflows/{analysis_id}", response_model=WorkflowCheckpoint)
+    def get_workflow(analysis_id: str) -> WorkflowCheckpoint:
+        checkpoint = app.state.analysis_service.get_workflow(analysis_id)
+        if checkpoint is None:
+            raise HTTPException(status_code=404, detail="workflow_not_found")
+        return checkpoint
+
+    @app.post("/v1/demo-workflows/{analysis_id}/advance", response_model=WorkflowCheckpoint)
+    def advance_workflow(
+        analysis_id: str, request: WorkflowAdvanceRequest
+    ) -> WorkflowCheckpoint:
+        try:
+            return app.state.analysis_service.advance_demo_workflow(
+                analysis_id, expected_version=request.expected_version
+            )
+        except LookupError as error:
+            raise HTTPException(status_code=404, detail="workflow_not_found") from error
+        except WorkflowConflictError as error:
+            raise HTTPException(status_code=409, detail="workflow_version_conflict") from error
 
     return app
 

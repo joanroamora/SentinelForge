@@ -37,6 +37,7 @@ Un flujo vertical demostrable: un proyecto Python de prueba es recibido por CLI 
 - [Iteración 2: expediente SQLite local](docs/05_ITERACION_2_PERSISTENCIA_SQLITE.md)
 - [Consultar y editar el historial desde la web](docs/06_HISTORIAL_WEB.md)
 - [Confiabilidad HTTP y CI](docs/07_CONFIABILIDAD_HTTP_Y_CI.md)
+- [Ciclo simulado persistente: estados y recuperación](docs/08_CICLO_DEMO_PERSISTENTE.md)
 - [ADR 0001: persistencia local con SQLite](docs/adr/0001-persistencia-sqlite-local.md)
 - [Mapa visual del estado actual](docs/diagrams/estado-actual.svg)
 - [Reglas permanentes para Codex](AGENTS.md)
@@ -79,6 +80,8 @@ export SENTINELFORGE_DATABASE_PATH=.local/sentinelforge.sqlite3
 ```
 
 La web queda en `http://127.0.0.1:8000/` y la documentación HTTP en `http://127.0.0.1:8000/docs`.
+
+El [ciclo simulado persistente](docs/08_CICLO_DEMO_PERSISTENTE.md) permite iniciar, consultar y avanzar fases desde CLI/API, recuperando el progreso tras reiniciar. Sus fases son marcadores de demostración; el reporte se publica al completar el ciclo.
 
 Detalles: [vertical slice](docs/04_ITERACION_1_VERTICAL_SLICE.md) y [persistencia local](docs/05_ITERACION_2_PERSISTENCIA_SQLITE.md).
 

@@ -13,7 +13,7 @@ En la primera iteración, un reporte solo existía dentro del proceso. Al cerrar
 - La ruta predeterminada es `.sentinelforge/analyses.sqlite3`. `SENTINELFORGE_DATABASE_PATH` permite elegir otra ruta local.
 - Cada operación abre su propia conexión. SQLite serializa las escrituras breves; no se comparte una conexión entre hilos.
 
-El esquema local lleva `PRAGMA user_version = 1`. Aún no hay un sistema de migraciones para actualizar instalaciones con esquemas futuros; se debe definir antes de cualquier despliegue o producción.
+Esta iteración introdujo `PRAGMA user_version = 1`. El [ciclo persistente posterior](08_CICLO_DEMO_PERSISTENTE.md) añade una migración local transaccional de 1 a 2 para guardar checkpoints. Las migraciones y respaldos de producción siguen pendientes.
 
 ## Idempotencia y recuperación
 

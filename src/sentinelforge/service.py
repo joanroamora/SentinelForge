@@ -16,6 +16,7 @@ from .demo_fixture import (
     STATEMENT_TEXT,
 )
 from .repository import ReportConflictError, SQLiteReportRepository
+from .workflow import WorkflowCheckpoint
 
 
 class AnalysisService:
@@ -25,6 +26,12 @@ class AnalysisService:
         self._repository = SQLiteReportRepository(database_path)
 
     def create_demo_analysis(self) -> AnalysisReport:
+        report = self._build_demo_report(Analysis())
+        self._repository.save_report(report)
+        return report
+
+    @staticmethod
+    def _build_demo_report(analysis: Analysis) -> AnalysisReport:
         evidence = Evidence(
             id=EVIDENCE_ID,
             kind="demo_fixture",
@@ -32,7 +39,7 @@ class AnalysisService:
             source="sentinelforge://fixtures/demo",
         )
         report = AnalysisReport(
-            analysis=Analysis(),
+            analysis=analysis,
             findings=[
                 Finding(
                     id=FINDING_ID,
@@ -49,13 +56,34 @@ class AnalysisService:
                     text=STATEMENT_TEXT,
                     actor="demo-user",
                     role="developer",
+                    created_at=analysis.created_at,
                     effect=STATEMENT_EFFECT,
                 )
             ],
             limitations=list(LIMITATIONS),
         )
-        self._repository.save_report(report)
         return report
+
+    def create_demo_workflow(self) -> WorkflowCheckpoint:
+        checkpoint = WorkflowCheckpoint()
+        self._repository.create_workflow(checkpoint)
+        return checkpoint
+
+    def get_workflow(self, analysis_id: str) -> WorkflowCheckpoint | None:
+        return self._repository.get_workflow(analysis_id)
+
+    def advance_demo_workflow(
+        self, analysis_id: str, *, expected_version: int
+    ) -> WorkflowCheckpoint:
+        checkpoint = self.get_workflow(analysis_id)
+        final_report = None
+        if checkpoint is not None:
+            final_report = self._build_demo_report(
+                Analysis(id=analysis_id, created_at=checkpoint.created_at)
+            )
+        return self._repository.advance_workflow(
+            analysis_id, expected_version=expected_version, final_report=final_report
+        )
 
     def get_report(self, analysis_id: str) -> AnalysisReport | None:
         return self._repository.get_report(analysis_id)
