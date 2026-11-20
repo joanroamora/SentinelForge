@@ -36,6 +36,7 @@ Un flujo vertical demostrable: un proyecto Python de prueba es recibido por CLI 
 - [Iteración 1: vertical slice de demostración](docs/04_ITERACION_1_VERTICAL_SLICE.md)
 - [Iteración 2: expediente SQLite local](docs/05_ITERACION_2_PERSISTENCIA_SQLITE.md)
 - [Consultar y editar el historial desde la web](docs/06_HISTORIAL_WEB.md)
+- [Confiabilidad HTTP y CI](docs/07_CONFIABILIDAD_HTTP_Y_CI.md)
 - [ADR 0001: persistencia local con SQLite](docs/adr/0001-persistencia-sqlite-local.md)
 - [Mapa visual del estado actual](docs/diagrams/estado-actual.svg)
 - [Reglas permanentes para Codex](AGENTS.md)

@@ -29,11 +29,11 @@ def create_app(
         return WEB_PAGE
 
     @app.post("/v1/analyses", response_model=AnalysisReport)
-    async def create_analysis() -> AnalysisReport:
+    def create_analysis() -> AnalysisReport:
         return app.state.analysis_service.create_demo_analysis()
 
     @app.get("/v1/analyses/{analysis_id}", response_model=AnalysisReport)
-    async def get_analysis(analysis_id: str) -> AnalysisReport:
+    def get_analysis(analysis_id: str) -> AnalysisReport:
         report = app.state.analysis_service.get_report(analysis_id)
         if report is None:
             raise HTTPException(status_code=404, detail="analysis_not_found")
@@ -43,7 +43,7 @@ def create_app(
         "/v1/analyses/{analysis_id}/reports/latest",
         response_model=AnalysisReport,
     )
-    async def get_latest_report(analysis_id: str) -> AnalysisReport:
+    def get_latest_report(analysis_id: str) -> AnalysisReport:
         report = app.state.analysis_service.get_report(analysis_id)
         if report is None:
             raise HTTPException(status_code=404, detail="analysis_not_found")
