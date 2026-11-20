@@ -1,7 +1,7 @@
 # SentinelForge AI
 
 **Multi-Agent Security Analysis Platform**  
-**Estado:** vertical slice ficticio de CLI/API/web con expediente SQLite local; todavía no existe un motor de escaneo funcional.
+**Estado:** demo CLI/API/web con ciclo SQLite recuperable e investigación/verificación simuladas sobre fixtures; todavía no existe un motor de escaneo funcional.
 
 ## Misión
 
@@ -38,6 +38,8 @@ Un flujo vertical demostrable: un proyecto Python de prueba es recibido por CLI 
 - [Consultar y editar el historial desde la web](docs/06_HISTORIAL_WEB.md)
 - [Confiabilidad HTTP y CI](docs/07_CONFIABILIDAD_HTTP_Y_CI.md)
 - [Ciclo simulado persistente: estados y recuperación](docs/08_CICLO_DEMO_PERSISTENTE.md)
+- [Investigación y verificación simuladas](docs/09_INVESTIGACION_SIMULADA.md)
+- [ADR 0004: roles simulados y trazas](docs/adr/0004-roles-simulados-y-trazas.md)
 - [ADR 0001: persistencia local con SQLite](docs/adr/0001-persistencia-sqlite-local.md)
 - [Mapa visual del estado actual](docs/diagrams/estado-actual.svg)
 - [Reglas permanentes para Codex](AGENTS.md)

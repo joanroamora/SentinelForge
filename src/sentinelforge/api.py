@@ -2,13 +2,14 @@
 
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi import Path as PathParameter
 from fastapi.responses import HTMLResponse
 
 from .contracts import AnalysisReport, DemoRevisionRequest, ReportRevision
 from .repository import ReportConflictError
 from .service import AnalysisService
+from .simulation import SimulationStartRequest, SimulationTrace
 from .web import WEB_PAGE
 from .workflow import WorkflowAdvanceRequest, WorkflowCheckpoint, WorkflowConflictError
 
@@ -80,8 +81,22 @@ def create_app(
             raise HTTPException(status_code=409, detail="report_revision_conflict") from error
 
     @app.post("/v1/demo-workflows", response_model=WorkflowCheckpoint, status_code=201)
-    def start_workflow() -> WorkflowCheckpoint:
-        return app.state.analysis_service.create_demo_workflow()
+    def start_workflow(request: SimulationStartRequest | None = None) -> WorkflowCheckpoint:
+        fixture_id = "auth-disabled" if request is None else request.fixture_id
+        return app.state.analysis_service.create_demo_workflow(fixture_id=fixture_id)
+
+    @app.get(
+        "/v1/demo-workflows/{analysis_id}/investigation", response_model=SimulationTrace
+    )
+    def get_investigation(
+        analysis_id: str, checkpoint_version: int | None = Query(default=None, ge=1)
+    ) -> SimulationTrace:
+        simulation = app.state.analysis_service.get_simulation(
+            analysis_id, checkpoint_version=checkpoint_version
+        )
+        if simulation is None:
+            raise HTTPException(status_code=404, detail="simulation_not_found")
+        return simulation
 
     @app.get("/v1/demo-workflows/{analysis_id}", response_model=WorkflowCheckpoint)
     def get_workflow(analysis_id: str) -> WorkflowCheckpoint:

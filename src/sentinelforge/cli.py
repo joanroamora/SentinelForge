@@ -1,11 +1,21 @@
 """Typer CLI adapter over the shared AnalysisService."""
 
+from enum import Enum
+from typing import Annotated, cast
+
 import typer
 
 from .service import AnalysisService
+from .simulation import DemoFixtureId
 from .workflow import WorkflowConflictError
 
 app = typer.Typer(help="Herramientas locales de demostración de SentinelForge.")
+
+
+class DemoFixtureOption(str, Enum):
+    auth_disabled = "auth-disabled"
+    auth_enabled = "auth-enabled"
+    source_missing = "source-missing"
 
 
 @app.callback()
@@ -21,10 +31,29 @@ def demo() -> None:
 
 
 @app.command()
-def workflow_start() -> None:
+def workflow_start(
+    fixture_id: Annotated[DemoFixtureOption, typer.Option()] = DemoFixtureOption.auth_disabled,
+) -> None:
     """Inicia un ciclo simulado persistente; no ejecuta escáneres."""
-    checkpoint = AnalysisService().create_demo_workflow()
+    checkpoint = AnalysisService().create_demo_workflow(
+        fixture_id=cast(DemoFixtureId, fixture_id.value)
+    )
     typer.echo(checkpoint.model_dump_json(indent=2))
+
+
+@app.command()
+def workflow_investigation(
+    analysis_id: str,
+    checkpoint_version: Annotated[int | None, typer.Option(min=1)] = None,
+) -> None:
+    """Consulta señal, hipótesis y verificación simuladas de un ciclo."""
+    simulation = AnalysisService().get_simulation(
+        analysis_id, checkpoint_version=checkpoint_version
+    )
+    if simulation is None:
+        typer.echo("simulation_not_found", err=True)
+        raise typer.Exit(code=2)
+    typer.echo(simulation.model_dump_json(indent=2))
 
 
 @app.command()

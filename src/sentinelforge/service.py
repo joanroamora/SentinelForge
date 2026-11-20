@@ -16,6 +16,7 @@ from .demo_fixture import (
     STATEMENT_TEXT,
 )
 from .repository import ReportConflictError, SQLiteReportRepository
+from .simulation import DemoFixtureId, SimulationStartRequest, SimulationTrace
 from .workflow import WorkflowCheckpoint
 
 
@@ -64,10 +65,20 @@ class AnalysisService:
         )
         return report
 
-    def create_demo_workflow(self) -> WorkflowCheckpoint:
+    def create_demo_workflow(
+        self, fixture_id: DemoFixtureId = "auth-disabled"
+    ) -> WorkflowCheckpoint:
+        request = SimulationStartRequest(fixture_id=fixture_id)
         checkpoint = WorkflowCheckpoint()
-        self._repository.create_workflow(checkpoint)
+        self._repository.create_workflow(
+            checkpoint, simulation=SimulationTrace(fixture_id=request.fixture_id)
+        )
         return checkpoint
+
+    def get_simulation(
+        self, analysis_id: str, *, checkpoint_version: int | None = None
+    ) -> SimulationTrace | None:
+        return self._repository.get_simulation(analysis_id, checkpoint_version=checkpoint_version)
 
     def get_workflow(self, analysis_id: str) -> WorkflowCheckpoint | None:
         return self._repository.get_workflow(analysis_id)

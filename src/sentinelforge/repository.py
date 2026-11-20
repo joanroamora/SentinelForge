@@ -12,9 +12,10 @@ from pathlib import Path
 from uuid import uuid4
 
 from .contracts import AnalysisReport, ReportRevision
+from .simulation import SimulationTrace, advance_simulation, enrich_demo_report
 from .workflow import WorkflowCheckpoint, WorkflowConflictError, next_checkpoint
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 DEFAULT_DATABASE_PATH = Path(".sentinelforge/analyses.sqlite3")
 
 
@@ -48,7 +49,7 @@ class SQLiteReportRepository:
         version = connection.execute("PRAGMA user_version").fetchone()[0]
         if version == SCHEMA_VERSION:
             return
-        if version not in (0, 1):
+        if version not in (0, 1, 2):
             raise RuntimeError(f"unsupported_database_schema_version:{version}")
 
         connection.execute("BEGIN IMMEDIATE")
@@ -136,6 +137,30 @@ class SQLiteReportRepository:
                         END
                         """
                     )
+                version = 2
+            if version == 2:
+                connection.execute(
+                    """
+                    CREATE TABLE workflow_simulations (
+                        analysis_id TEXT NOT NULL,
+                        checkpoint_version INTEGER NOT NULL,
+                        trace_json TEXT NOT NULL,
+                        PRIMARY KEY (analysis_id, checkpoint_version),
+                        FOREIGN KEY (analysis_id, checkpoint_version)
+                            REFERENCES workflow_checkpoints (analysis_id, version)
+                    )
+                    """
+                )
+                for operation in ("UPDATE", "DELETE"):
+                    connection.execute(
+                        f"""
+                        CREATE TRIGGER workflow_simulations_no_{operation.lower()}
+                        BEFORE {operation} ON workflow_simulations
+                        BEGIN
+                            SELECT RAISE(ABORT, 'workflow_simulations_are_immutable');
+                        END
+                        """
+                    )
                 connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             elif version != SCHEMA_VERSION:
                 raise RuntimeError(f"unsupported_database_schema_version:{version}")
@@ -204,6 +229,10 @@ class SQLiteReportRepository:
         workflow = self._read_checkpoint(connection, report.analysis.id)
         if workflow is not None and workflow.state != "COMPLETED":
             raise WorkflowConflictError("workflow_report_not_ready")
+        if workflow is not None and revision == 1:
+            trace = self._read_simulation(connection, report.analysis.id, workflow.version)
+            if trace is not None:
+                report = enrich_demo_report(report, trace)
         connection.execute(
             """
             INSERT INTO report_revisions (analysis_id, revision, report_json, created_at)
@@ -244,7 +273,41 @@ class SQLiteReportRepository:
             {"schema_version": "1.0", "version": checkpoint.version, "state": checkpoint.state},
         )
 
-    def create_workflow(self, checkpoint: WorkflowCheckpoint) -> None:
+    @staticmethod
+    def _read_simulation(
+        connection: sqlite3.Connection, analysis_id: str, version: int | None = None
+    ) -> SimulationTrace | None:
+        row = connection.execute(
+            """
+            SELECT trace_json FROM workflow_simulations
+            WHERE analysis_id = ? AND (? IS NULL OR checkpoint_version = ?)
+            ORDER BY checkpoint_version DESC LIMIT 1
+            """,
+            (analysis_id, version, version),
+        ).fetchone()
+        return None if row is None else SimulationTrace.model_validate_json(row[0])
+
+    @staticmethod
+    def _insert_simulation(
+        connection: sqlite3.Connection, checkpoint: WorkflowCheckpoint, trace: SimulationTrace
+    ) -> None:
+        connection.execute(
+            """
+            INSERT INTO workflow_simulations (analysis_id, checkpoint_version, trace_json)
+            VALUES (?, ?, ?)
+            """,
+            (checkpoint.analysis_id, checkpoint.version, trace.model_dump_json()),
+        )
+
+    def get_simulation(
+        self, analysis_id: str, *, checkpoint_version: int | None = None
+    ) -> SimulationTrace | None:
+        with self._connection() as connection:
+            return self._read_simulation(connection, analysis_id, checkpoint_version)
+
+    def create_workflow(
+        self, checkpoint: WorkflowCheckpoint, *, simulation: SimulationTrace | None = None
+    ) -> None:
         if checkpoint.version != 1:
             raise WorkflowConflictError("workflow_must_start_at_received")
         with self._connection() as connection:
@@ -252,7 +315,10 @@ class SQLiteReportRepository:
             try:
                 existing = self._read_checkpoint(connection, checkpoint.analysis_id, 1)
                 if existing is not None:
-                    if existing != checkpoint:
+                    if (
+                        existing != checkpoint
+                        or self._read_simulation(connection, checkpoint.analysis_id, 1) != simulation
+                    ):
                         raise WorkflowConflictError("workflow_id_conflict")
                 else:
                     report_exists = connection.execute(
@@ -262,6 +328,8 @@ class SQLiteReportRepository:
                     if report_exists:
                         raise WorkflowConflictError("workflow_id_conflict")
                     self._insert_checkpoint(connection, checkpoint)
+                    if simulation is not None:
+                        self._insert_simulation(connection, checkpoint, simulation)
                 connection.commit()
             except Exception:
                 connection.rollback()
@@ -293,7 +361,13 @@ class SQLiteReportRepository:
                     raise WorkflowConflictError("workflow_version_conflict")
                 advanced = next_checkpoint(current)
                 if advanced != current:
+                    trace = self._read_simulation(connection, analysis_id, current.version)
+                    if trace is None and self._read_simulation(connection, analysis_id) is not None:
+                        raise ValueError("simulation_checkpoint_missing")
+                    next_trace = None if trace is None else advance_simulation(trace, advanced.state)
                     self._insert_checkpoint(connection, advanced)
+                    if next_trace is not None:
+                        self._insert_simulation(connection, advanced, next_trace)
                     if advanced.state == "COMPLETED":
                         if (
                             final_report is None

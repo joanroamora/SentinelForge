@@ -6,6 +6,8 @@ Hasta ahora se recuperaban reportes terminados. Faltaba conservar el progreso de
 
 Esta entrega cierra esa parte de la persistencia antes de incorporar investigadores y verificadores simulados. Las fases solo registran progreso: todavía no hacen detección, investigación ni verificación técnica.
 
+La [capa posterior de investigación simulada](09_INVESTIGACION_SIMULADA.md) añade resultados a los ciclos nuevos y migra el esquema a 3. Los ciclos anteriores mantienen el comportamiento descrito en esta entrega.
+
 ```text
 RECEIVED → DETECTING → INVESTIGATING → VERIFYING → REPORTING → COMPLETED
 versión 1       2             3              4           5             6

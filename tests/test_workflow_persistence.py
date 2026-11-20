@@ -171,7 +171,7 @@ def test_schema_v1_migration_preserves_existing_report_and_audit_event(tmp_path)
     assert events[0]["event_id"] == "existing-event"
     assert events[0]["payload_json"] == '{"revision":1}'
     with sqlite3.connect(database) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 2
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 3
         assert connection.execute("SELECT COUNT(*) FROM report_revisions").fetchone()[0] == 1
         with pytest.raises(sqlite3.IntegrityError, match="report_revisions_are_immutable"):
             connection.execute("UPDATE report_revisions SET report_json = '{}'")
