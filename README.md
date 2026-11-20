@@ -1,7 +1,7 @@
 # SentinelForge AI
 
 **Multi-Agent Security Analysis Platform**  
-**Estado:** definición inicial (no existe aún un motor de escaneo funcional).
+**Estado:** vertical slice ficticio de CLI/API/web; todavía no existe un motor de escaneo funcional.
 
 ## Misión
 
@@ -33,36 +33,37 @@ Un flujo vertical demostrable: un proyecto Python de prueba es recibido por CLI 
 - [Visión del producto](docs/01_PRODUCTO_Y_REQUISITOS.md)
 - [Arquitectura y contratos](docs/02_ARQUITECTURA_Y_CONTRATOS.md)
 - [Roadmap académico](docs/03_ROADMAP_ACADEMICO.md)
+- [Iteración 1: vertical slice de demostración](docs/04_ITERACION_1_VERTICAL_SLICE.md)
+- [Mapa visual del estado actual](docs/diagrams/estado-actual.svg)
 - [Reglas permanentes para Codex](AGENTS.md)
 - [Primer encargo para Codex](prompts/01_PRIMERA_ITERACION_CODEX.md)
 
-## Preparar entorno virtual (cuando empiece la implementación)
+## Ejecutar la demo local
+
+La demo crea un reporte sintético para comprobar que CLI y API comparten el mismo motor. No analiza ni ejecuta código, y no afirma detectar vulnerabilidades.
 
 ### Windows PowerShell
 
 ```powershell
 py -3 -m venv .venv
-.\.venv\Scripts\python.exe -m pip --version
-# Cuando Codex haya generado pyproject.toml:
 .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
 .\.venv\Scripts\python.exe -m pytest
+.\.venv\Scripts\sentinelforge.exe demo
+.\.venv\Scripts\python.exe -m uvicorn sentinelforge.api:app --reload
 ```
 
 ### Linux / macOS
 
 ```bash
 python3 -m venv .venv
-./.venv/bin/python -m pip --version
-# Cuando Codex haya generado pyproject.toml:
 ./.venv/bin/python -m pip install -e '.[dev]'
 ./.venv/bin/python -m pytest
+./.venv/bin/sentinelforge demo
+./.venv/bin/python -m uvicorn sentinelforge.api:app --reload
 ```
 
-No ejecutar `pip install` ni herramientas Python sin el prefijo del intérprete de `.venv`. No se necesita activar el entorno para usar sus binarios mediante rutas explícitas.
+La web queda en `http://127.0.0.1:8000/` y la documentación HTTP en `http://127.0.0.1:8000/docs`.
 
-## Cómo comenzar
+Más detalle de la primera iteración: [vertical slice de demostración](docs/04_ITERACION_1_VERTICAL_SLICE.md).
 
-1. Poner estos archivos en la raíz del repositorio existente **sin sobrescribir contenido propio**. Revisar diferencias si ya existen archivos homónimos.
-2. Abrir el directorio con Codex y usar `prompts/01_PRIMERA_ITERACION_CODEX.md` como primera tarea.
-3. Exigir revisión de cambios y pruebas antes de avanzar.
-4. Mantener un registro de decisiones en `docs/adr/` a medida que se implementa.
+No ejecutar `pip install` ni herramientas Python fuera de `.venv`. No hace falta activar el entorno si se invocan sus binarios mediante rutas explícitas. La explicación de clases, pruebas y límites está en `docs/04_ITERACION_1_VERTICAL_SLICE.md`.
