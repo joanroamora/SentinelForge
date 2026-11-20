@@ -168,7 +168,7 @@
   <!-- Git footer -->
   <rect x="48" y="977" width="1344" height="43" rx="13" fill="#0e1725" stroke="#243248"/>
   <text x="72" y="1004" class="muted" font-size="13" font-weight="700" letter-spacing="1">GIT</text>
-  <text x="122" y="1004" fill="#d8e3ef" font-size="13">GitHub: PR #2 del historial web</text>
+  <text x="122" y="1004" fill="#d8e3ef" font-size="13">GitHub: PR #3 · web + HTTP + CI</text>
   <circle cx="352" cy="998" r="3" fill="#71829b"/>
   <text x="450" y="1004" fill="#ffd166" font-size="13">feature/http-reliability-ci: publicada · PR #3 hacia dev</text>
 </svg>
