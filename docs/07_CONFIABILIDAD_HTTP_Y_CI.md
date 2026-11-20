@@ -20,13 +20,13 @@ La prueba cubre crear análisis, consultar análisis y consultar el reporte late
 
 Resultado local del 20 de noviembre de 2026: **14 pruebas aprobadas y Ruff sin errores**, ejecutadas con Python 3.14.10 dentro de `.venv`.
 
-## Workflow preparado
+## Workflow validado
 
 `.github/workflows/ci.yml` ejecuta Ruff y pytest en una matriz de Ubuntu 24.04 y Windows 2022, con Python 3.11 y 3.14.10. El primero comprueba el mínimo declarado; el segundo coincide con la versión local validada. La CI crea una `.venv` efímera e invoca su Python para instalar y ejecutar herramientas.
 
 El workflow responde a PR hacia `dev`/`main` y a push en esas ramas. Solo tiene permiso de lectura de contenido, no conserva credenciales en el checkout y fija las acciones oficiales a sus SHA. No realiza despliegues ni necesita secretos. `workflow_dispatch` podrá usarse normalmente cuando el archivo exista en la rama predeterminada.
 
-La configuración debe publicarse antes de obtener evidencia de una ejecución de Actions. No se presenta una configuración local como una CI remota aprobada. Aún no hay lockfile: las dependencias se resuelven desde los rangos de `pyproject.toml`.
+La [primera ejecución remota](https://github.com/joanroamora/SentinelForge/actions/runs/44798059792) del 20 de noviembre de 2026 terminó con éxito en las cuatro combinaciones para el commit `18bc4e3`, dentro del PR #3. Aún no hay lockfile: las dependencias se resuelven desde los rangos de `pyproject.toml`.
 
 ## Validar localmente en Windows
 

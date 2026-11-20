@@ -118,7 +118,7 @@
     <text x="1001" y="394" fill="#dce6f2">HTTP responde durante esperas del servicio</text>
 
     <circle cx="980" cy="430" r="10" fill="#1c4d45"/><path d="m975 430 4 4 7-8" fill="none" stroke="#72edcd" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-    <text x="1001" y="435" fill="#dce6f2">CI preparada · ejecución remota pendiente</text>
+    <text x="1001" y="435" fill="#dce6f2">CI verificada · Linux y Windows · 4 entornos</text>
   </g>
 
   <!-- Report contents -->
@@ -170,5 +170,5 @@
   <text x="72" y="1004" class="muted" font-size="13" font-weight="700" letter-spacing="1">GIT</text>
   <text x="122" y="1004" fill="#d8e3ef" font-size="13">GitHub: PR #2 del historial web</text>
   <circle cx="352" cy="998" r="3" fill="#71829b"/>
-  <text x="450" y="1004" fill="#ffd166" font-size="13">feature/http-reliability-ci: siguiente capa preparada localmente</text>
+  <text x="450" y="1004" fill="#ffd166" font-size="13">feature/http-reliability-ci: publicada · PR #3 hacia dev</text>
 </svg>

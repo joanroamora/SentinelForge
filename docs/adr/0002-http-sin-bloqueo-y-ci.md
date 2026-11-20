@@ -1,6 +1,6 @@
 # ADR 0002: llamadas SQLite fuera del event loop y CI mínima
 
-- **Estado:** implementado localmente; primera ejecución remota de CI pendiente
+- **Estado:** implementado en PR #3; primera ejecución remota de CI aprobada
 - **Fecha:** 2026-11-20
 
 ## Contexto
@@ -16,7 +16,7 @@ Declarar con `def` los handlers que llaman al servicio SQLite y conservar `async
 - No se añaden dependencias al proyecto ni cambia el contrato HTTP.
 - La capacidad del pool de hilos es finita; SQLite conserva sus restricciones de escritura.
 - El workflow tiene permisos de solo lectura y acciones fijadas por SHA. No despliega.
-- La primera corrida remota debe verificarse después de publicar la configuración.
+- La [primera corrida remota](https://github.com/joanroamora/SentinelForge/actions/runs/44798059792) aprobó las cuatro combinaciones del workflow para `18bc4e3`.
 - Los rangos de dependencias siguen sin un archivo de bloqueo; no se garantiza resolución idéntica entre fechas.
 
 ## Referencias
