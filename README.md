@@ -1,7 +1,7 @@
 # SentinelForge AI
 
 **Multi-Agent Security Analysis Platform**  
-**Estado:** vertical slice ficticio de CLI/API/web; todavía no existe un motor de escaneo funcional.
+**Estado:** vertical slice ficticio de CLI/API/web con expediente SQLite local; todavía no existe un motor de escaneo funcional.
 
 ## Misión
 
@@ -34,6 +34,8 @@ Un flujo vertical demostrable: un proyecto Python de prueba es recibido por CLI 
 - [Arquitectura y contratos](docs/02_ARQUITECTURA_Y_CONTRATOS.md)
 - [Roadmap académico](docs/03_ROADMAP_ACADEMICO.md)
 - [Iteración 1: vertical slice de demostración](docs/04_ITERACION_1_VERTICAL_SLICE.md)
+- [Iteración 2: expediente SQLite local](docs/05_ITERACION_2_PERSISTENCIA_SQLITE.md)
+- [ADR 0001: persistencia local con SQLite](docs/adr/0001-persistencia-sqlite-local.md)
 - [Mapa visual del estado actual](docs/diagrams/estado-actual.svg)
 - [Reglas permanentes para Codex](AGENTS.md)
 - [Primer encargo para Codex](prompts/01_PRIMERA_ITERACION_CODEX.md)
@@ -52,6 +54,12 @@ py -3 -m venv .venv
 .\.venv\Scripts\python.exe -m uvicorn sentinelforge.api:app --reload
 ```
 
+Los análisis se guardan en `.sentinelforge/analyses.sqlite3` y sobreviven al reinicio. Para cambiar la ruta solo en esa sesión de PowerShell:
+
+```powershell
+$env:SENTINELFORGE_DATABASE_PATH = ".local\sentinelforge.sqlite3"
+```
+
 ### Linux / macOS
 
 ```bash
@@ -62,8 +70,14 @@ python3 -m venv .venv
 ./.venv/bin/python -m uvicorn sentinelforge.api:app --reload
 ```
 
+Los análisis se guardan en `.sentinelforge/analyses.sqlite3`. Para cambiar la ruta en esa sesión:
+
+```bash
+export SENTINELFORGE_DATABASE_PATH=.local/sentinelforge.sqlite3
+```
+
 La web queda en `http://127.0.0.1:8000/` y la documentación HTTP en `http://127.0.0.1:8000/docs`.
 
-Más detalle de la primera iteración: [vertical slice de demostración](docs/04_ITERACION_1_VERTICAL_SLICE.md).
+Detalles: [vertical slice](docs/04_ITERACION_1_VERTICAL_SLICE.md) y [persistencia local](docs/05_ITERACION_2_PERSISTENCIA_SQLITE.md).
 
 No ejecutar `pip install` ni herramientas Python fuera de `.venv`. No hace falta activar el entorno si se invocan sus binarios mediante rutas explícitas. La explicación de clases, pruebas y límites está en `docs/04_ITERACION_1_VERTICAL_SLICE.md`.

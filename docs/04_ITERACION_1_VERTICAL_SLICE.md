@@ -38,4 +38,4 @@ python3 -m venv .venv
 
 ## Límites y aprendizaje
 
-Los reportes solo viven en memoria y desaparecen al reiniciar el proceso. No hay autenticación, persistencia, escáner, agente LLM ni ejecución aislada. Una virtualenv aísla dependencias de Python, pero no es un sandbox para código no confiable. En esta fase se prueba el contrato del producto, no su capacidad para detectar vulnerabilidades.
+En esta primera iteración los reportes vivían en memoria; la siguiente iteración añadió persistencia local en SQLite (ver [Iteración 2](05_ITERACION_2_PERSISTENCIA_SQLITE.md)). Aún no hay autenticación, escáner, agente LLM ni ejecución aislada. Una virtualenv aísla dependencias de Python, pero no es un sandbox para código no confiable. Esta fase probó el contrato del producto, no su capacidad para detectar vulnerabilidades.

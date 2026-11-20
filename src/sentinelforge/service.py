@@ -1,6 +1,8 @@
 """Application service shared by the CLI and HTTP adapter."""
 
-from .contracts import Analysis, AnalysisReport, Evidence, Finding, HumanStatement
+from pathlib import Path
+
+from .contracts import Analysis, AnalysisReport, Evidence, Finding, HumanStatement, ReportRevision
 from .demo_fixture import (
     EVIDENCE_DESCRIPTION,
     EVIDENCE_ID,
@@ -13,13 +15,14 @@ from .demo_fixture import (
     STATEMENT_QUESTION,
     STATEMENT_TEXT,
 )
+from .repository import ReportConflictError, SQLiteReportRepository
 
 
 class AnalysisService:
     """Creates and retrieves a synthetic demo report; it does not scan code."""
 
-    def __init__(self) -> None:
-        self._reports: dict[str, AnalysisReport] = {}
+    def __init__(self, database_path: str | Path | None = None) -> None:
+        self._repository = SQLiteReportRepository(database_path)
 
     def create_demo_analysis(self) -> AnalysisReport:
         evidence = Evidence(
@@ -51,8 +54,38 @@ class AnalysisService:
             ],
             limitations=list(LIMITATIONS),
         )
-        self._reports[report.analysis.id] = report
+        self._repository.save_report(report)
         return report
 
     def get_report(self, analysis_id: str) -> AnalysisReport | None:
-        return self._reports.get(analysis_id)
+        return self._repository.get_report(analysis_id)
+
+    def get_revision(
+        self, analysis_id: str, revision: int | None = None
+    ) -> ReportRevision | None:
+        return self._repository.get_revision(analysis_id, revision)
+
+    def add_demo_limitation(
+        self, analysis_id: str, *, expected_revision: int, limitation: str
+    ) -> ReportRevision:
+        # Build from the requested snapshot so a retry produces identical content.
+        snapshot = self.get_revision(analysis_id, expected_revision)
+        if snapshot is None:
+            if self.get_revision(analysis_id) is None:
+                raise LookupError("analysis_not_found")
+            raise ReportConflictError("report_revision_conflict")
+        report = snapshot.report.model_copy(deep=True)
+        report.limitations.append(limitation)
+        revision = self.append_report_revision(report, expected_revision=expected_revision)
+        return ReportRevision(revision=revision, report=report)
+
+    def append_report_revision(
+        self,
+        report: AnalysisReport,
+        *,
+        expected_revision: int,
+    ) -> int:
+        return self._repository.append_report_revision(
+            report,
+            expected_revision=expected_revision,
+        )

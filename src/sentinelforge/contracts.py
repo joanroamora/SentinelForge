@@ -54,3 +54,14 @@ class AnalysisReport(Contract):
     evidence: list[Evidence]
     human_statements: list[HumanStatement]
     limitations: list[str]
+
+
+class ReportRevision(Contract):
+    schema_version: Literal["1.0"] = "1.0"
+    revision: int = Field(ge=1)
+    report: AnalysisReport
+
+
+class DemoRevisionRequest(Contract):
+    expected_revision: int = Field(ge=1, strict=True)
+    limitation: str = Field(min_length=1, max_length=2000, pattern=r"\S")
