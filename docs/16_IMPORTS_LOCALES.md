@@ -1,5 +1,7 @@
 # Imports dentro de funciones: mejora medida sobre el mismo corpus
 
+Esta capa conserva la comparación 1.0 → 1.1. La [mejora posterior de ámbito de parámetros](17_AMBITO_DE_PARAMETROS_Y_GUIA.md) documenta el motor 1.2 y su comparación sobre las mismas referencias.
+
 ## Problema y vocabulario
 
 La primera evaluación encontró una señal omitida en este patrón:

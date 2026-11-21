@@ -122,31 +122,32 @@ def test_local_source_is_data_and_never_executed_or_retained(tmp_path):
     assert "Ignore checks" not in trace.model_dump_json()
 
 
-def test_legacy_component_versions_and_rows_survive_new_detector(tmp_path, monkeypatch):
+@pytest.mark.parametrize("legacy_version", ["1.0", "1.1"])
+def test_legacy_component_versions_and_rows_survive_new_detector(tmp_path, monkeypatch, legacy_version):
     database = tmp_path / "legacy.sqlite3"
     service = AnalysisService(database)
     module_source = b"import subprocess\ndef launch(command):\n    return subprocess.run(command, shell=True)\n"
     with monkeypatch.context() as context:
-        context.setattr(local_scan, "DETECTOR_VERSION", "1.0")
+        context.setattr(local_scan, "DETECTOR_VERSION", legacy_version)
         old_report = scan_source_bytes("same.py", module_source)
-    old_report.detector_version = "1.0"
+    old_report.detector_version = legacy_version
     old_case = service._repository.save_local_scan(old_report)
     review = review_original_source(old_report, module_source)
-    review.verifier_version = "1.0"
+    review.verifier_version = legacy_version
     service._repository.save_source_review(old_case.id, uuid4(), review)
     investigation = investigate_argument(old_report, module_source, review)
-    investigation.investigator_version = investigation.verifier_version = "1.0"
+    investigation.investigator_version = investigation.verifier_version = legacy_version
     receipt = service._repository.save_argument_investigation(old_case.id, uuid4(), investigation)
     with sqlite3.connect(database) as connection:
         before = connection.execute("SELECT record_json FROM local_scan_revisions ORDER BY revision").fetchall()
     restarted = AnalysisService(database)
     historical = restarted.get_local_scan(old_case.id)
-    assert historical.report.detector_version == historical.source_review.verifier_version == "1.0"
-    assert historical.argument_investigation.investigator_version == "1.0"
-    assert historical.argument_investigation.verifier_version == "1.0"
+    assert historical.report.detector_version == historical.source_review.verifier_version == legacy_version
+    assert historical.argument_investigation.investigator_version == legacy_version
+    assert historical.argument_investigation.verifier_version == legacy_version
     assert restarted.trace_source_bytes(old_case.id, module_source, receipt.submission_id) == receipt
     new_case = restarted.create_source_scan("same.py", module_source)
-    assert new_case.report.detector_version == "1.1" and new_case.id != old_case.id
+    assert new_case.report.detector_version == "1.2" and new_case.id != old_case.id
     with sqlite3.connect(database) as connection:
         assert connection.execute("PRAGMA user_version").fetchone()[0] == 7
         assert set(before).issubset(set(connection.execute("SELECT record_json FROM local_scan_revisions").fetchall()))
@@ -160,10 +161,10 @@ def test_api_and_cli_use_the_improved_pipeline_without_confirming_risk(tmp_path,
         async with AsyncClient(transport=ASGITransport(app=create_app(database_path=database)), base_url="http://test") as client:
             headers = {"Content-Type": "application/octet-stream"}
             case = (await client.post("/v1/local-scans?filename=local.py", content=SOURCE, headers=headers)).json()
-            assert case["report"]["detector_version"] == "1.1" and len(case["report"]["signals"]) == 1
+            assert case["report"]["detector_version"] == "1.2" and len(case["report"]["signals"]) == 1
             identity = case["id"]
             verified = await client.post(f"/v1/local-scans/{identity}/verify?submission_id={uuid4()}", content=SOURCE, headers=headers)
-            assert verified.status_code == 200 and verified.json()["review"]["verifier_version"] == "1.1"
+            assert verified.status_code == 200 and verified.json()["review"]["verifier_version"] == "1.2"
             traced = await client.post(f"/v1/local-scans/{identity}/trace?submission_id={key}", content=SOURCE, headers=headers)
             assert traced.status_code == 200 and traced.json()["revision"] == 3
             latest = (await client.get(f"/v1/local-scans/{identity}")).json()

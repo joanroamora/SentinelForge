@@ -75,7 +75,6 @@ def test_uncovered_or_negative_patterns_do_not_invent_a_signal(source):
     "del subprocess",
     "subprocess.run = other",
     "subprocess.__dict__['run'] = other",
-    "def another(subprocess): pass",
     "class subprocess: pass",
     "def subprocess(): pass",
     "for subprocess in []: pass",

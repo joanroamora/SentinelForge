@@ -58,18 +58,18 @@ def test_builtin_reference_baseline_separates_scope_boundaries_and_errors(benchm
     assert report.acceptance == "pass" and report.status == "COMPLETED"
     assert len(report.cases) == 28
     assert report.expected_error_matches == 2 and not report.reference_failures
-    assert set(report.boundary_gaps) == {"unrelated-shadow-gap", "assignment-alias-gap"}
+    assert set(report.boundary_gaps) == {"assignment-alias-gap"}
     supported = report.groups["in_scope"]
     assert supported.cases == 23 and supported.detection.true_positives == 15
     assert supported.detection.true_negatives == 8 and supported.detection.false_positives == 0
     assert supported.localization.matched == 16 and supported.tracing.traced == 16
     assert supported.tracing.inconclusive == 4
     total = report.groups["all"]
-    assert total.eligible_detection_cases == 26 and total.detection.false_negatives == 2
-    assert total.detection.recall == pytest.approx(16 / 18)
-    assert total.localization.recall == pytest.approx(17 / 19)
+    assert total.eligible_detection_cases == 26 and total.detection.false_negatives == 1
+    assert total.detection.recall == pytest.approx(17 / 18)
+    assert total.localization.recall == pytest.approx(18 / 19)
     assert total.tracing.origin_accuracy_when_traced == 1
-    assert total.tracing.coverage == total.tracing.reference_agreement_end_to_end == pytest.approx(17 / 19)
+    assert total.tracing.coverage == total.tracing.reference_agreement_end_to_end == pytest.approx(18 / 19)
     assert report.groups["boundary"].detection.precision == 1
 
 
@@ -206,7 +206,7 @@ def test_cli_json_pretty_and_exit_policy(benchmark, monkeypatch):
     pretty = CliRunner().invoke(app, ["--no-animation", "evaluate", "--format", "pretty"])
     assert pretty.exit_code == 0, pretty.output
     assert "Detección por caso" in pretty.stdout and "Fronteras" in pretty.stdout
-    assert "unrelated-shadow-gap" in pretty.stdout and "\x1b" not in pretty.stdout
+    assert "assignment-alias-gap" in pretty.stdout and "\x1b" not in pretty.stdout
     failed = benchmark.model_copy(update={"acceptance": "fail"})
     monkeypatch.setattr(AnalysisService, "evaluate_builtin_corpus", lambda self: failed)
     assert CliRunner().invoke(app, ["evaluate"]).exit_code == 1

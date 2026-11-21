@@ -3,7 +3,7 @@
 **Multi-Agent Security Analysis Platform**  
 **Estado:** workspace local con detector Python acotado, corroboración de la fuente e investigación del origen del comando mediante asignaciones simples en una función, con comprobador separado. Expedientes SQLite versionados y contexto humano sin verificar. Disponible por CLI/API/web, con una demo simulada identificada.
 
-La evaluación local añade 28 casos sintéticos etiquetados y métricas separadas de detección/localización/trazado. El motor 1.1 reconoce imports directos dentro de funciones: localiza 17/19 señales de referencia y conserva dos omisiones de frontera visibles. Las etiquetas son de desarrollo, sin auditoría independiente; no miden seguridad general.
+La evaluación local añade 28 casos sintéticos etiquetados y métricas separadas de detección/localización/trazado. El motor 1.2 reconoce imports directos dentro de funciones y distingue parámetros de funciones independientes: localiza 18/19 señales de referencia y conserva una omisión de frontera visible. Las etiquetas son de desarrollo, sin auditoría independiente; no miden seguridad general.
 
 ## Misión
 
@@ -48,6 +48,8 @@ Un flujo vertical demostrable: un proyecto Python de prueba es recibido por CLI 
 - [Origen del comando y comprobación por paso](docs/14_ORIGEN_DEL_COMANDO.md)
 - [Evaluación local: corpus, métricas y límites](docs/15_EVALUACION_LOCAL.md)
 - [Imports locales: mejora medida y compatibilidad](docs/16_IMPORTS_LOCALES.md)
+- [Ámbito de parámetros y guía de capas para empezar](docs/17_AMBITO_DE_PARAMETROS_Y_GUIA.md)
+- [ADR 0012: parámetros de funciones independientes](docs/adr/0012-parametros-de-funciones-independientes.md)
 - [ADR 0011: imports locales y compatibilidad](docs/adr/0011-imports-locales-y-compatibilidad.md)
 - [ADR 0010: corpus y evaluación local](docs/adr/0010-corpus-y-evaluacion-local.md)
 - [ADR 0009: origen local del comando](docs/adr/0009-origen-local-del-comando.md)

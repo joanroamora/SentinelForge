@@ -88,3 +88,7 @@ La primera línea base reproduce 16 de 19 señales de referencia, con 3 omisione
 ## Avance local: primera mejora medida (21 nov 2026)
 
 El motor 1.1 incorpora [imports directos dentro de funciones](16_IMPORTS_LOCALES.md), junto con corroboración independiente y trazado compatible. Sobre el corpus 1.0 intacto, se reproducen 17 de 19 señales y recorridos, frente a 16 anteriores; quedan dos omisiones y cuatro resultados inconclusos. Se conservan revisiones de componentes 1.0, sin migrar SQLite ni modificar el significado de las señales.
+
+## Avance local: parámetros de funciones independientes (21 nov 2026)
+
+El motor 1.2 distingue parámetros de otras funciones al resolver imports de módulo. El [resumen con guía de capas](17_AMBITO_DE_PARAMETROS_Y_GUIA.md) explica el cambio y el producto actual. El corpus intacto pasa a 18/19 señales y recorridos; conserva una omisión por alias asignado y cuatro trazados inconclusos. La nueva versión no amplía por sí sola la evaluación a proyectos completos ni valida seguridad general.

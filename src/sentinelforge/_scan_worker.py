@@ -1,7 +1,8 @@
 """Bounded, standalone AST worker; input is data and is never imported or executed.
 
 Run with ``python -I -S path/to/_scan_worker.py``. Only stdlib imports belong here.
-Module aliases retain conservative file-wide shadow checks. Function-local
+Module aliases ignore unassigned parameters of unrelated named functions;
+other binding and mutation checks remain conservative. Function-local
 imports must be direct body statements before the call in the same function;
 rebindings in that function suppress them. Closures and conditional imports
 remain outside this bounded resolver.
@@ -47,7 +48,8 @@ def _attribute_root(node: ast.AST) -> str | None:
 
 
 def _aliases(tree: ast.Module | ast.FunctionDef | ast.AsyncFunctionDef,
-             nodes: list[ast.AST]) -> dict[str, tuple[str, int, int]]:
+             nodes: list[ast.AST], parameter_owners: dict | None = None,
+             visible_functions: frozenset | None = None) -> dict[str, tuple[str, int, int]]:
     imports = [node for node in tree.body if isinstance(node, (ast.Import, ast.ImportFrom))]
     allowed_ids = {id(node) for node in imports}
     aliases: dict[str, tuple[str, int, int]] = {}
@@ -75,6 +77,9 @@ def _aliases(tree: ast.Module | ast.FunctionDef | ast.AsyncFunctionDef,
             if root is not None:
                 blocked.add(root)
         elif isinstance(node, ast.arg):
+            owner = None if parameter_owners is None else parameter_owners.get(node)
+            if owner is not None and visible_functions is not None and owner not in visible_functions:
+                continue
             blocked.add(node.arg)
         elif isinstance(node, (
             ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef,
@@ -102,6 +107,25 @@ def _function_body_scope(node: ast.AST, parents: dict[ast.AST, ast.AST]) -> ast.
     return None
 
 
+def _parameter_function(node: ast.AST, parents: dict[ast.AST, ast.AST]) -> ast.FunctionDef | ast.AsyncFunctionDef | None:
+    while node in parents:
+        node = parents[node]
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            return node
+        if isinstance(node, ast.Lambda):
+            return None
+    return None
+
+
+def _enclosing_functions(node: ast.AST, parents: dict[ast.AST, ast.AST]) -> frozenset:
+    owners = set()
+    while node in parents:
+        node = parents[node]
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            owners.add(node)
+    return frozenset(owners)
+
+
 def scan_source(raw: bytes) -> dict:
     """Return only bounded locations and canonical call names, never source text."""
     if len(raw) > MAX_SOURCE_BYTES:
@@ -117,8 +141,9 @@ def scan_source(raw: bytes) -> dict:
             nodes.append(node)
             if len(nodes) > MAX_AST_NODES:
                 return {"signals": [], "error": "source_too_complex"}
-        aliases = _aliases(tree, nodes)
         parents = {child: node for node in nodes for child in ast.iter_child_nodes(node)}
+        parameter_owners = {node: _parameter_function(node, parents) for node in nodes if isinstance(node, ast.arg)}
+        module_aliases = {}
         local_aliases = {}
         mutated = {_attribute_root(node) for node in nodes if isinstance(node, (ast.Attribute, ast.Subscript))
                    and isinstance(node.ctx, (ast.Store, ast.Del))}
@@ -130,11 +155,14 @@ def scan_source(raw: bytes) -> dict:
             ):
                 continue
             target = None
+            visible_functions = _enclosing_functions(node, parents)
+            if visible_functions not in module_aliases:
+                module_aliases[visible_functions] = _aliases(tree, nodes, parameter_owners, visible_functions)
             scope = _function_body_scope(node, parents)
             if scope is not None and scope not in local_aliases:
                 local_aliases[scope] = {name: value for name, value in
                     _aliases(scope, list(ast.walk(scope))).items() if name not in mutated}
-            candidates = aliases | local_aliases.get(scope, {})
+            candidates = module_aliases[visible_functions] | local_aliases.get(scope, {})
             if isinstance(node.func, ast.Name):
                 candidate = candidates.get(node.func.id)
                 if candidate is not None and candidate[0] in SUBPROCESS_FUNCTIONS and (

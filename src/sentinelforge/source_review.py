@@ -50,7 +50,7 @@ class SourceDecision(Contract):
 class SourceReview(Contract):
     schema_version: Literal["1.0"] = "1.0"
     verifier: Literal["sentinelforge-source-check"] = "sentinelforge-source-check"
-    verifier_version: Literal["1.0", "1.1"] = "1.1"
+    verifier_version: Literal["1.0", "1.1", "1.2"] = "1.2"
     python_version: str = Field(default_factory=platform.python_version)
     checked_at: AwareDatetime = Field(default_factory=lambda: datetime.now(UTC))
     scope: Literal["static_pattern_only"] = "static_pattern_only"

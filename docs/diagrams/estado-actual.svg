@@ -113,13 +113,13 @@
     <text x="1001" y="312" fill="#dce6f2">Python 3.14.10 · dependencias en <tspan fill="#72edcd">.venv</tspan></text>
 
     <circle cx="980" cy="348" r="10" fill="#1c4d45"/><path d="m975 348 4 4 7-8" fill="none" stroke="#72edcd" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-    <text x="1001" y="353" fill="#dce6f2">354 pruebas pasan · 2 omitidas por SO</text>
+    <text x="1001" y="353" fill="#dce6f2">370 pruebas pasan · 2 omitidas por SO</text>
 
     <circle cx="980" cy="389" r="10" fill="#1c4d45"/><path d="m975 389 4 4 7-8" fill="none" stroke="#72edcd" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
     <text x="1001" y="394" fill="#dce6f2">Ruff limpio · sin instalaciones globales</text>
 
     <circle cx="980" cy="430" r="10" fill="#1c4d45"/><path d="m975 430 4 4 7-8" fill="none" stroke="#72edcd" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-    <text x="1001" y="435" fill="#dce6f2">28 casos · 2 omisiones visibles</text>
+    <text x="1001" y="435" fill="#dce6f2">28 casos · 1 omisión visible</text>
   </g>
 
   <!-- Report contents -->
@@ -171,5 +171,5 @@
   <text x="72" y="1004" class="muted" font-size="13" font-weight="700" letter-spacing="1">GIT</text>
   <text x="122" y="1004" fill="#d8e3ef" font-size="13">GitHub: PR #4 integrado</text>
   <circle cx="352" cy="998" r="3" fill="#71829b"/>
-  <text x="450" y="1004" fill="#ffd166" font-size="13">codex/function-local-imports · motor 1.1</text>
+  <text x="450" y="1004" fill="#ffd166" font-size="13">codex/function-parameter-scope · motor 1.2</text>
 </svg>

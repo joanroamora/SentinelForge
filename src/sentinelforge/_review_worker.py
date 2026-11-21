@@ -12,7 +12,7 @@ import tokenize
 FUNCTIONS = {"run", "Popen", "call", "check_call", "check_output"}
 
 
-def imported_target(root, call_position, tree, nodes, symbols):
+def imported_target(root, call, tree, nodes, symbols, parents):
     """Use compiler symbol tables plus original imports, not the detector's alias resolver."""
     bindings = []
     for node in tree.body:
@@ -32,17 +32,30 @@ def imported_target(root, call_position, tree, nodes, symbols):
                 bindings.append((target, (node.lineno, node.col_offset)))
     if not bindings or any(target != bindings[0][0] for target, _ in bindings):
         return None
-    if bindings[0][0] is None or not any(position < call_position for _, position in bindings):
+    if bindings[0][0] is None or not any(position < (call.lineno, call.col_offset) for _, position in bindings):
         return None
     symbol = symbols.lookup(root)
     if not symbol.is_imported() or symbol.is_assigned() or symbol.is_namespace():
         return None
+    named_functions = {(node.name, node.lineno) for node in nodes
+                       if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))}
+    visible = set()
+    current = call
+    while current in parents:
+        current = parents[current]
+        if isinstance(current, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            visible.add((current.name, current.lineno))
     pending = list(symbols.get_children())
     while pending:
         table = pending.pop()
         pending.extend(table.get_children())
         if root in table.get_identifiers():
             entry = table.lookup(root)
+            key = (table.get_name(), table.get_lineno())
+            if (table.get_type() == "function" and key in named_functions and key not in visible and
+                    entry.is_parameter() and not entry.is_assigned() and not entry.is_imported() and
+                    not entry.is_namespace()):
+                continue
             if entry.is_local() or entry.is_parameter() or entry.is_imported() or entry.is_assigned():
                 return None
     for node in nodes:
@@ -150,7 +163,7 @@ def verify(payload):
             root = (func.id if isinstance(func, ast.Name) else func.value.id
                     if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name) else None)
             target = (function_import_target(root, node, parents, nodes, symbols) or
-                      imported_target(root, (node.lineno, node.col_offset), tree, nodes, symbols)) if root else None
+                      imported_target(root, node, tree, nodes, symbols, parents)) if root else None
             if target is None:
                 result, reason = "inconclusive", "binding_not_established"
             else:
