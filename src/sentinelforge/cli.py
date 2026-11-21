@@ -1,5 +1,6 @@
 """Typer CLI adapter over the shared AnalysisService."""
 
+import json
 from enum import Enum
 from typing import Annotated, cast
 from uuid import UUID
@@ -12,7 +13,7 @@ from .service import AnalysisService
 from .simulation import DemoFixtureId
 from .workflow import WorkflowConflictError
 
-app = typer.Typer(help="Herramientas locales de demostración de SentinelForge.")
+app = typer.Typer(help="Demo y análisis estático local acotado de SentinelForge.")
 
 
 class DemoFixtureOption(str, Enum):
@@ -24,6 +25,16 @@ class DemoFixtureOption(str, Enum):
 @app.callback()
 def main() -> None:
     """CLI de SentinelForge AI."""
+
+
+@app.command()
+def scan_file(file: str) -> None:
+    """Inspecciona un .py relativo al directorio actual sin ejecutar su código."""
+    report = AnalysisService().scan_local_file(file)
+    # ASCII JSON stays valid under legacy Windows pipe encodings; values round-trip via JSON.
+    typer.echo(json.dumps(report.model_dump(mode="json"), indent=2, ensure_ascii=True))
+    if report.status == "ERROR":
+        raise typer.Exit(code=2)
 
 
 @app.command()

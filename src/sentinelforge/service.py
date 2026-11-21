@@ -15,6 +15,7 @@ from .demo_fixture import (
     STATEMENT_QUESTION,
     STATEMENT_TEXT,
 )
+from .local_scan import LocalScanReport, scan_local_file
 from .monitor import MonitorAnswerReceipt, MonitorAnswerRequest, MonitorQuestion
 from .repository import ReportConflictError, SQLiteReportRepository
 from .simulation import DemoFixtureId, SimulationStartRequest, SimulationTrace
@@ -22,10 +23,14 @@ from .workflow import WorkflowCheckpoint
 
 
 class AnalysisService:
-    """Creates and retrieves a synthetic demo report; it does not scan code."""
+    """Shared application entry point for demo history and bounded static scans."""
 
     def __init__(self, database_path: str | Path | None = None) -> None:
         self._repository = SQLiteReportRepository(database_path)
+
+    def scan_local_file(self, relative_path: str, *, root: Path | None = None) -> LocalScanReport:
+        """Inspect one file relative to the caller's authorized local root; do not persist it."""
+        return scan_local_file(Path.cwd() if root is None else root, relative_path)
 
     def create_demo_analysis(self) -> AnalysisReport:
         report = self._build_demo_report(Analysis())
