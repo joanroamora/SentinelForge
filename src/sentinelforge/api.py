@@ -11,6 +11,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 
+from .argument_lineage import ArgumentInvestigationReceipt, LineageError
 from .contracts import AnalysisReport, DemoRevisionRequest, ReportRevision
 from .local_source import MAX_SOURCE_BYTES, LocalSourceError, normalize_source_label
 from .monitor import (
@@ -75,6 +76,18 @@ def create_app(
             except LookupError as error:
                 raise HTTPException(status_code=404, detail="local_scan_not_found") from error
             except SourceReviewError as error:
+                raise HTTPException(status_code=error.http_status, detail=str(error)) from error
+
+    @app.post("/v1/local-scans/{analysis_id}/trace", response_model=ArgumentInvestigationReceipt)
+    async def scan_trace(analysis_id: str, request: Request,
+                         submission_id: UUID) -> ArgumentInvestigationReceipt:
+        async with artifact_input(request) as content:
+            try:
+                return await run_in_threadpool(app.state.analysis_service.trace_source_bytes,
+                                              analysis_id, content, submission_id)
+            except LookupError as error:
+                raise HTTPException(status_code=404, detail="local_scan_not_found") from error
+            except LineageError as error:
                 raise HTTPException(status_code=error.http_status, detail=str(error)) from error
 
     @app.get("/v1/local-scans", response_model=list[ScanCase])

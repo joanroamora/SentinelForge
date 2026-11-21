@@ -7,6 +7,7 @@ from uuid import UUID
 import typer
 from pydantic import ValidationError
 
+from .argument_lineage import LineageError
 from .local_source import LocalSourceError
 from .monitor import MonitorAnswerRequest, MonitorConflictError
 from .service import AnalysisService
@@ -102,6 +103,19 @@ def scan_verify(analysis_id: str, file: str, submission_id: Annotated[UUID, type
     try:
         service.review_local_source(analysis_id, file, submission_id)
     except (LookupError, SourceReviewError, LocalSourceError) as error:
+        typer.echo(str(error), err=True)
+        raise typer.Exit(code=2) from error
+    emit(service.get_local_scan(analysis_id), output)
+
+
+@app.command()
+def scan_trace(analysis_id: str, file: str, submission_id: Annotated[UUID, typer.Option()],
+               output: Annotated[OutputFormat, typer.Option("--format")] = OutputFormat.auto) -> None:
+    """Rastrea asignaciones del argumento y contrasta cada paso con la fuente original."""
+    service = AnalysisService()
+    try:
+        service.trace_local_source(analysis_id, file, submission_id)
+    except (LookupError, LineageError, LocalSourceError) as error:
         typer.echo(str(error), err=True)
         raise typer.Exit(code=2) from error
     emit(service.get_local_scan(analysis_id), output)

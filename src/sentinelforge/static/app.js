@@ -4,7 +4,7 @@
   const names = {overview:'Vista general',new:'Nuevo análisis',history:'Expedientes',case:'Expediente',lab:'Laboratorio demo'};
   const states = {COMPLETED:['Inspección terminada','teal'],PARTIAL:['Revisión pendiente','amber'],ERROR:['Error técnico','red']};
   let rows = [], offset = 0, selected = null, current = null, latestRevision = 0, busy = false, draft = null, activeView='overview';
-  let reviewFile=null, reviewDraft=null;
+  let reviewFile=null, reviewDraft=null, traceFile=null, traceDraft=null;
   const make = (tag, text, cls) => { const node=document.createElement(tag); if(text!==undefined) node.textContent=text; if(cls)node.className=cls; return node; };
   const short = id => id.replace('scan-','').slice(0,12);
   const date = value => new Intl.DateTimeFormat('es',{dateStyle:'medium',timeStyle:'short'}).format(new Date(value));
@@ -16,6 +16,7 @@
       let code=''; try { code=(await response.json()).detail; } catch { /* Generic error below. */ }
       const messages={source_too_large:'El archivo supera los 64 KiB permitidos.',source_path_invalid:'Selecciona un nombre de archivo Python válido.',unsupported_file_type:'Solo se admiten archivos .py.',scanner_busy:'El motor está ocupado. Reintenta en unos segundos.',monitor_submission_conflict:'La clave de envío corresponde a otro contenido. Tu borrador se conserva.',monitor_question_already_answered:'La pregunta ya fue respondida. Actualiza el expediente; tu borrador se conserva.'};
       Object.assign(messages,{source_hash_mismatch:'La huella del archivo no coincide con la fuente original. No se modificó el expediente.',source_review_already_recorded:'Ya se guardó una corroboración. Actualiza a la última revisión.',source_review_submission_conflict:'Esta clave de envío corresponde a otro expediente.',source_verifier_timeout:'La comprobación superó su tiempo límite. Puedes reintentar.',source_verifier_failed:'El verificador no pudo terminar. No se creó una revisión.',source_verifier_invalid_python:'El verificador no pudo interpretar esta fuente. El expediente conserva su estado.'});
+      Object.assign(messages,{lineage_review_required:'Primero corrobora todas las señales con la fuente original.',lineage_already_recorded:'Ya se guardó una investigación. Actualiza a la última revisión.',lineage_submission_conflict:'Esta clave de envío corresponde a otro expediente.',lineage_worker_timeout:'La investigación superó su tiempo límite. Puedes reintentar.',lineage_worker_failed:'La investigación no pudo terminar. No se creó una revisión.',lineage_invalid_output:'No se obtuvo un resultado válido. El expediente conserva su estado.'});
       const error=new Error(messages[code] || (response.status===404?'No se encontró el expediente o la revisión.':response.status===422?'Revisa los datos enviados.':'No se pudo completar la operación. Puedes reintentar.'));
       error.code=code; throw error;
     }
@@ -33,6 +34,9 @@
     const canReview=current&&current.revision===latestRevision&&current.report.status==='COMPLETED'&&current.report.signals.length&&!current.source_review;
     el('case-review-file').disabled=busy||!canReview;
     el('case-review-submit').disabled=busy||!canReview||!reviewFile;
+    const canTrace=current&&current.revision===latestRevision&&!current.argument_investigation&&current.source_review?.decisions.every(item=>item.result==='pattern_reproduced');
+    el('case-trace-file').disabled=busy||!canTrace;
+    el('case-trace-submit').disabled=busy||!canTrace||!traceFile;
   }
   async function action(work) { if(busy)return; busy=true;controls();notice('Procesando en el entorno local…'); try {await work();notice('Operación completada.');}catch(error){notice(error instanceof TypeError?'No se pudo conectar con el servidor. Tu borrador se conserva.':error.message,true);}finally{busy=false;controls();} }
   function view(name) {
@@ -94,9 +98,37 @@
       card.append(head,make('p',reasons[decision.reason]));results.append(card);
     }
   }
+  function renderArgumentTrace(item) {
+    const investigation=item.argument_investigation,historical=item.revision!==latestRevision;
+    const ready=item.source_review?.decisions.every(decision=>decision.result==='pattern_reproduced');
+    el('case-trace').hidden=!item.report.signals.length;
+    el('case-trace-form').hidden=!!investigation||historical||!ready;
+    el('case-trace-state').textContent=investigation?'Recorrido guardado':historical?'Sin investigación en esta revisión':ready?'Listo para investigar':'Requiere corroboración';
+    el('case-trace-state').className='badge '+(investigation?'teal':'amber');
+    el('case-trace-hint').textContent=historical&&!investigation?'Esta revisión aún no incluye investigación. Abre la última para continuar.':!ready?'Primero corrobora la fuente y sus señales en el paso anterior.':investigation?'Hash original coincidente · '+date(investigation.checked_at)+' · comprobación independiente por paso':'Vuelve a aportar el archivo original. Solo seguimos asignaciones simples dentro de una función.';
+    const container=el('case-trace-results');container.replaceChildren();
+    const kinds={literal:'Literal',parameter:'Parámetro',call_result:'Resultado de llamada',assignment:'Asignación',sink:'Llamada con shell=True',unknown:'Origen desconocido'};
+    const results={steps_reproduced:'Pasos reproducidos',inconclusive:'Inconcluso',not_reproduced:'No reproducido'};
+    const stepResults={reproduced:'Paso reproducido',inconclusive:'Sin resolver',not_reproduced:'No reproducido'};
+    const reasons={straight_line_bindings:'Se reprodujo la cadena de asignaciones en la fuente original.',callee_not_followed:'El recorrido termina en el resultado de otra llamada; su implementación no se sigue.',binding_out_of_scope:'El nombre no tiene una asignación local que podamos seguir.',expression_out_of_scope:'La expresión queda fuera del alcance de las asignaciones simples.',control_flow_or_opaque_statement:'Una rama, bucle u otra operación impide resolver el recorrido.',function_out_of_scope:'La llamada queda fuera del alcance de una sola función y sus asignaciones simples.',dynamic_arguments:'Los argumentos dinámicos impiden identificar el comando en este alcance.',trace_limit:'Se alcanzó el límite de pasos o sentencias. El origen queda sin resolver.',argument_missing:'No se encontró un argumento de comando explícito.'};
+    for(const [index,trace] of (investigation?.traces||[]).entries()) {
+      const {hypothesis,verification}=trace,card=make('article',undefined,'trace-card'),head=make('div',undefined,'trace-heading');
+      head.append(make('strong','Señal '+(index+1)),make('span',results[verification.result],'badge '+(verification.result==='steps_reproduced'?'teal':'amber')));
+      const chain=make('ol',undefined,'trace-chain');chain.setAttribute('aria-label','Recorrido del argumento, desde su origen hasta la llamada');
+      for(const [position,step] of hypothesis.steps.entries()) {
+        const node=make('li',undefined,'trace-node '+(verification.step_results[position]==='reproduced'?'reproduced':'unresolved'));
+        node.append(make('span',String(position+1).padStart(2,'0'),'trace-number'),make('strong',kinds[step.kind]));
+        node.append(make('code',step.symbol||(step.kind==='literal'?'valor omitido':step.kind==='call_result'?'función no seguida':'sin resolver')));
+        node.append(make('small',`Línea ${step.line}:${step.column} → ${step.end_line}:${step.end_column}`));
+        node.append(make('span',stepResults[verification.step_results[position]],'trace-check'));chain.append(node);
+      }
+      card.append(head,chain,make('p',verification.result==='not_reproduced'?'El comprobador no reprodujo la propuesta. Conservamos la discrepancia para revisión.':reasons[hypothesis.reason],'trace-reason'));container.append(card);
+    }
+  }
   function renderCase(item) {
     const changed=!current||current.id!==item.id;current=item;
     if(changed){draft=null;reviewFile=null;reviewDraft=null;el('case-review-file').value='';el('case-review-file-info').textContent='Puede tener otro nombre; los bytes deben coincidir con el archivo analizado. Hasta 64 KiB.';for(const id of ['case-actor','case-role','case-text'])el(id).value='';}
+    if(changed){traceFile=null;traceDraft=null;el('case-trace-file').value='';el('case-trace-file-info').textContent='Archivo .py de hasta 64 KiB, con los mismos bytes del análisis.';}
     el('case-title').textContent=item.report.source.relative_path;el('case-id').textContent=item.id;
     const [label,cls]=states[item.status];el('case-status').textContent=label;el('case-status').className='badge '+cls;
     el('case-version').textContent=`Revisión ${item.revision} de ${latestRevision} · ${date(item.created_at)}`;
@@ -115,6 +147,7 @@
       if(draft&&item.question.status==='answered'&&el('case-text').value&&item.human_statements[0]?.id!=='statement-'+draft.id){const saved=make('details');saved.append(make('summary','Borrador local conservado'),make('pre',el('case-text').value));el('case-answer-display').append(saved);}
     }
     renderSourceReview(item);
+    renderArgumentTrace(item);
     el('case-json').textContent=JSON.stringify(item,null,2);view('case');controls();
   }
   async function openCase(id,revision) {
@@ -162,6 +195,17 @@
     if(!reviewDraft)reviewDraft={id:crypto.randomUUID()};
     const id=current.id,file=reviewFile,key=reviewDraft.id;
     action(async()=>{await request('/v1/local-scans/'+encodeURIComponent(id)+'/verify?submission_id='+encodeURIComponent(key),{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:file});await openCase(id);reviewFile=null;reviewDraft=null;el('case-review-file').value='';});
+  };
+  el('case-trace-file').onchange=event=>{
+    const file=event.target.files[0];traceDraft=null;
+    traceFile=file&&file.name.toLowerCase().endsWith('.py')&&file.size<=65536?file:null;
+    el('case-trace-file-info').textContent=traceFile?`${file.name} · ${file.size} bytes · listo para investigar`:'Selecciona un .py de hasta 64 KiB.';controls();
+  };
+  el('case-trace-form').onsubmit=event=>{
+    event.preventDefault();if(!current||!traceFile||current.argument_investigation||current.revision!==latestRevision||!current.source_review?.decisions.every(item=>item.result==='pattern_reproduced'))return;
+    if(!traceDraft)traceDraft={id:crypto.randomUUID()};
+    const id=current.id,file=traceFile,key=traceDraft.id;
+    action(async()=>{await request('/v1/local-scans/'+encodeURIComponent(id)+'/trace?submission_id='+encodeURIComponent(key),{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:file});await openCase(id);traceFile=null;traceDraft=null;el('case-trace-file').value='';});
   };
   el('download-case').onclick=()=>{if(!current)return;const url=URL.createObjectURL(new Blob([JSON.stringify(current,null,2)],{type:'application/json'})),link=make('a');link.href=url;link.download=`sentinelforge-${short(current.id)}-r${current.revision}.json`;link.click();URL.revokeObjectURL(url);};
   window.addEventListener('hashchange',route);

@@ -3,6 +3,13 @@
 from pathlib import Path
 from uuid import UUID
 
+from .argument_lineage import (
+    ArgumentInvestigationReceipt,
+    LineageError,
+    investigate_argument,
+    original_lineage_bytes,
+    require_corroboration,
+)
 from .contracts import Analysis, AnalysisReport, Evidence, Finding, HumanStatement, ReportRevision
 from .demo_fixture import (
     EVIDENCE_DESCRIPTION,
@@ -55,6 +62,28 @@ class AnalysisService:
 
     def answer_local_scan(self, analysis_id: str, request: MonitorAnswerRequest) -> ScanAnswerReceipt:
         return self._repository.answer_local_scan(analysis_id, request)
+
+    def trace_source_bytes(self, analysis_id: str, content: bytes,
+                           submission_id: UUID) -> ArgumentInvestigationReceipt:
+        case = self.get_local_scan(analysis_id)
+        if case is None:
+            raise LookupError("local_scan_not_found")
+        original_lineage_bytes(case.report, content)
+        require_corroboration(case.source_review)
+        previous = self._repository.get_argument_receipt(submission_id)
+        if previous is not None:
+            if previous.analysis_id != analysis_id:
+                raise LineageError("lineage_submission_conflict")
+            return previous
+        if case.argument_investigation is not None:
+            raise LineageError("lineage_already_recorded")
+        investigation = investigate_argument(case.report, content, case.source_review)
+        return self._repository.save_argument_investigation(analysis_id, submission_id, investigation)
+
+    def trace_local_source(self, analysis_id: str, relative_path: str,
+                           submission_id: UUID, *, root: Path | None = None) -> ArgumentInvestigationReceipt:
+        _, content = load_local_source(Path.cwd() if root is None else root, relative_path)
+        return self.trace_source_bytes(analysis_id, content, submission_id)
 
     def review_source_bytes(self, analysis_id: str, content: bytes,
                             submission_id: UUID) -> SourceReviewReceipt:

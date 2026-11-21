@@ -130,6 +130,7 @@ def test_schema_five_migration_preserves_every_existing_row(tmp_path):
     case = service.create_source_scan("example.py", SOURCE)
     service.answer_local_scan(case.id, human_answer())
     with sqlite3.connect(database) as connection:
+        connection.execute("DROP TABLE local_scan_investigations")
         connection.execute("DROP TABLE local_scan_verifications")
         connection.execute("PRAGMA user_version = 5")
         tables = [row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")
@@ -137,7 +138,7 @@ def test_schema_five_migration_preserves_every_existing_row(tmp_path):
         before = {table: connection.execute(f"SELECT * FROM {table}").fetchall() for table in tables}
     assert AnalysisService(database).get_local_scan(case.id).schema_version == "1.0"
     with sqlite3.connect(database) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 6
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 7
         assert {table: connection.execute(f"SELECT * FROM {table}").fetchall() for table in tables} == before
 
 

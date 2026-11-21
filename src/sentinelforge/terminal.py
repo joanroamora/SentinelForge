@@ -15,6 +15,7 @@ from rich.panel import Panel
 from rich.progress_bar import ProgressBar
 from rich.table import Table
 from rich.text import Text
+from rich.tree import Tree
 
 from .terminal_logo import show_logo
 
@@ -117,6 +118,26 @@ def emit(value, output: OutputFormat = OutputFormat.auto) -> None:
                                 decision["reason"])
             term.print(Panel(checked, title="Fuente original · hash coincidente", border_style="cyan"))
             term.print(Text(" Solo patrón estático. Riesgo y declaraciones humanas sin verificar.", style="dim"))
+        if data.get("argument_investigation"):
+            kinds = {"literal": "Literal (valor omitido)", "parameter": "Parámetro de función",
+                     "call_result": "Resultado de llamada (no seguida)", "assignment": "Asignación",
+                     "sink": "Llamada con shell=True", "unknown": "Origen desconocido"}
+            results = {"steps_reproduced": "Pasos reproducidos", "inconclusive": "Inconcluso",
+                       "not_reproduced": "No reproducido"}
+            investigation = data["argument_investigation"]
+            for trace in investigation["traces"]:
+                hypothesis, check = trace["hypothesis"], trace["verification"]
+                tree = Tree(Text("Origen del comando · " + results[check["result"]], style="bold cyan"))
+                branch = tree
+                for step, result in zip(hypothesis["steps"], check["step_results"], strict=True):
+                    label = (kinds[step["kind"]] + (" · " + safe_text(step["symbol"]) if step["symbol"] else "") +
+                             f" · {step['line']}:{step['column']} · " +
+                             {"reproduced": "reproducido", "inconclusive": "inconcluso",
+                              "not_reproduced": "no reproducido"}[result])
+                    branch = branch.add(Text(label, style="yellow" if result != "reproduced" else ""))
+                term.print(Panel(tree, subtitle=hypothesis["reason"], border_style="#24465c"))
+            term.print(Text(" Una función, asignaciones simples. No demuestra entrada externa ni explotabilidad.",
+                            style="dim"))
         for error in report["errors"]:
             term.print(Panel(Text(error["code"] + "\n" + error["message"]), border_style="red"))
         if data.get("question"):

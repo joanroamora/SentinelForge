@@ -11,6 +11,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID, uuid4
 
+from .argument_lineage import (
+    ArgumentInvestigation,
+    ArgumentInvestigationReceipt,
+    LineageError,
+    require_corroboration,
+)
 from .contracts import AnalysisReport, ReportRevision
 from .local_scan import LocalScanReport
 from .monitor import (
@@ -27,7 +33,7 @@ from .simulation import SimulationTrace, advance_simulation, enrich_demo_report
 from .source_review import SourceReview, SourceReviewError, SourceReviewReceipt
 from .workflow import WorkflowCheckpoint, WorkflowConflictError, next_checkpoint
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 DEFAULT_DATABASE_PATH = Path(".sentinelforge/analyses.sqlite3")
 
 
@@ -61,7 +67,7 @@ class SQLiteReportRepository:
         version = connection.execute("PRAGMA user_version").fetchone()[0]
         if version == SCHEMA_VERSION:
             return
-        if version not in (0, 1, 2, 3, 4, 5):
+        if version not in (0, 1, 2, 3, 4, 5, 6):
             raise RuntimeError(f"unsupported_database_schema_version:{version}")
 
         connection.execute("BEGIN IMMEDIATE")
@@ -255,6 +261,24 @@ class SQLiteReportRepository:
                         BEGIN SELECT RAISE(ABORT, 'local_scan_verifications_are_immutable'); END
                     """)
                 version = 6
+            if version == 6:
+                connection.execute("""
+                    CREATE TABLE local_scan_investigations (
+                        submission_id TEXT PRIMARY KEY,
+                        analysis_id TEXT NOT NULL,
+                        revision INTEGER NOT NULL,
+                        receipt_json TEXT NOT NULL,
+                        FOREIGN KEY (analysis_id, revision)
+                            REFERENCES local_scan_revisions (analysis_id, revision)
+                    )
+                """)
+                for operation in ("UPDATE", "DELETE"):
+                    connection.execute(f"""
+                        CREATE TRIGGER local_scan_investigations_no_{operation.lower()}
+                        BEFORE {operation} ON local_scan_investigations
+                        BEGIN SELECT RAISE(ABORT, 'local_scan_investigations_are_immutable'); END
+                    """)
+                version = 7
             if version != SCHEMA_VERSION:
                 raise RuntimeError(f"unsupported_database_schema_version:{version}")
             connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
@@ -350,6 +374,50 @@ class SQLiteReportRepository:
                 self._append_event(connection, analysis_id, "local_scan_context_received",
                                    {"submission_id": str(request.submission_id),
                                     "verification_status": "unverified"})
+                connection.commit()
+                return receipt
+            except Exception:
+                connection.rollback()
+                raise
+
+    def get_argument_receipt(self, submission_id: UUID) -> ArgumentInvestigationReceipt | None:
+        with self._connection() as connection:
+            row = connection.execute("SELECT receipt_json FROM local_scan_investigations "
+                                     "WHERE submission_id = ?", (str(submission_id),)).fetchone()
+        return None if row is None else ArgumentInvestigationReceipt.model_validate_json(row[0])
+
+    def save_argument_investigation(self, analysis_id: str, submission_id: UUID,
+                                    investigation: ArgumentInvestigation) -> ArgumentInvestigationReceipt:
+        with self._connection() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                previous = connection.execute("SELECT receipt_json FROM local_scan_investigations "
+                                              "WHERE submission_id = ?", (str(submission_id),)).fetchone()
+                if previous is not None:
+                    receipt = ArgumentInvestigationReceipt.model_validate_json(previous[0])
+                    if (receipt.analysis_id != analysis_id or
+                            receipt.investigation.source_sha256 != investigation.source_sha256):
+                        raise LineageError("lineage_submission_conflict")
+                    connection.commit()
+                    return receipt
+                case = self._read_scan(connection, analysis_id)
+                if case is None:
+                    raise LookupError("local_scan_not_found")
+                require_corroboration(case.source_review)
+                if case.argument_investigation is not None:
+                    raise LineageError("lineage_already_recorded")
+                payload = case.model_dump()
+                payload.update(schema_version="1.2", revision=case.revision + 1,
+                               argument_investigation=investigation.model_dump())
+                revised = ScanCase.model_validate(payload)
+                self._insert_scan(connection, revised)
+                receipt = ArgumentInvestigationReceipt(
+                    analysis_id=analysis_id, submission_id=submission_id,
+                    revision=revised.revision, investigation=investigation)
+                connection.execute("INSERT INTO local_scan_investigations VALUES (?, ?, ?, ?)",
+                                   (str(submission_id), analysis_id, revised.revision, receipt.model_dump_json()))
+                self._append_event(connection, analysis_id, "local_scan_argument_investigation_recorded",
+                                   {"submission_id": str(submission_id), "revision": revised.revision})
                 connection.commit()
                 return receipt
             except Exception:

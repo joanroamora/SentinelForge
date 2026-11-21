@@ -6,6 +6,7 @@ from uuid import UUID
 
 from pydantic import AwareDatetime, Field, model_serializer, model_validator
 
+from .argument_lineage import ArgumentInvestigation, require_corroboration
 from .contracts import Contract, HumanStatement
 from .local_scan import LocalScanReport
 from .monitor import MonitorAnswerRequest, MonitorConflictError
@@ -23,7 +24,7 @@ class ScanContextQuestion(Contract):
 
 
 class ScanCase(Contract):
-    schema_version: Literal["1.0", "1.1"] = "1.0"
+    schema_version: Literal["1.0", "1.1", "1.2"] = "1.0"
     report_type: Literal["local_scan_case"] = "local_scan_case"
     is_demo: Literal[False] = False
     id: str = Field(pattern=r"^scan-[0-9a-f]{64}$")
@@ -34,18 +35,23 @@ class ScanCase(Contract):
     question: ScanContextQuestion | None = None
     human_statements: list[HumanStatement] = Field(default_factory=list, max_length=1)
     source_review: SourceReview | None = None
+    argument_investigation: ArgumentInvestigation | None = None
 
     @model_serializer(mode="wrap")
     def versioned_payload(self, handler):
         data = handler(self)
         if self.schema_version == "1.0":
             data.pop("source_review", None)
+        if self.schema_version != "1.2":
+            data.pop("argument_investigation", None)
         return data
 
     @model_validator(mode="after")
     def case_matches_observation(self) -> Self:
         if (self.source_review is None) != (self.schema_version == "1.0"):
             raise ValueError("scan_case_review_version_mismatch")
+        if (self.argument_investigation is not None) != (self.schema_version == "1.2"):
+            raise ValueError("scan_case_investigation_version_mismatch")
         if self.report.scan_fingerprint is None or self.id != "scan-" + self.report.scan_fingerprint:
             raise ValueError("scan_case_identity_mismatch")
         expected = ("ERROR" if self.report.status == "ERROR" else
@@ -66,6 +72,18 @@ class ScanCase(Contract):
                 or [item.signal_fingerprint for item in self.source_review.decisions] !=
                 [item.fingerprint for item in self.report.signals]):
             raise ValueError("scan_case_review_reference_mismatch")
+        if self.argument_investigation is not None:
+            require_corroboration(self.source_review)
+            investigation = self.argument_investigation
+            if (investigation.source_sha256 != self.report.source.sha256 or
+                    [item.hypothesis.signal_fingerprint for item in investigation.traces] !=
+                    [item.fingerprint for item in self.report.signals]):
+                raise ValueError("scan_case_investigation_reference_mismatch")
+            for trace, signal in zip(investigation.traces, self.report.signals, strict=True):
+                sink = trace.hypothesis.steps[-1]
+                if sink.symbol != signal.call or any(getattr(sink, key) != getattr(signal, key)
+                        for key in ("line", "column", "end_line", "end_column")):
+                    raise ValueError("scan_case_investigation_sink_mismatch")
         return self
 
 

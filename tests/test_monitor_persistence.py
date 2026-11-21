@@ -141,6 +141,7 @@ def test_schema_three_migration_preserves_existing_data_and_legacy_mode(tmp_path
             for table in tables
         }
         # Model the schema from the preceding release in a disposable database.
+        connection.execute("DROP TABLE local_scan_investigations")
         connection.execute("DROP TABLE local_scan_verifications")
         connection.execute("DROP TABLE local_scan_submissions")
         connection.execute("DROP TABLE local_scan_revisions")
@@ -154,7 +155,7 @@ def test_schema_three_migration_preserves_existing_data_and_legacy_mode(tmp_path
     assert restarted.get_workflow(checkpoint.analysis_id) == checkpoint
     assert restarted.get_report(report.analysis.id) == report
     with sqlite3.connect(database) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 6
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 7
         for table in tables:
             assert connection.execute(f"SELECT * FROM {table} ORDER BY 1, 2").fetchall() == original_rows[table]
         assert connection.execute("SELECT COUNT(*) FROM monitor_questions").fetchone()[0] == 0

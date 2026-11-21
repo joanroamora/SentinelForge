@@ -32,6 +32,7 @@ def test_schema_two_migration_preserves_legacy_workflow_without_inventing_invest
         original_reports = connection.execute("SELECT * FROM report_revisions").fetchall()
         original_events = connection.execute("SELECT * FROM analysis_events").fetchall()
         original_checkpoints = connection.execute("SELECT * FROM workflow_checkpoints").fetchall()
+        connection.execute("DROP TABLE local_scan_investigations")
         connection.execute("DROP TABLE local_scan_verifications")
         connection.execute("DROP TABLE local_scan_submissions")
         connection.execute("DROP TABLE local_scan_revisions")
@@ -45,7 +46,7 @@ def test_schema_two_migration_preserves_legacy_workflow_without_inventing_invest
     assert restarted.get_report(original_report.analysis.id) == original_report
     assert restarted.get_simulation(legacy.analysis_id) is None
     with sqlite3.connect(database) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 6
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 7
         assert connection.execute("SELECT * FROM report_revisions").fetchall() == original_reports
         assert connection.execute("SELECT * FROM analysis_events").fetchall() == original_events
         assert connection.execute("SELECT * FROM workflow_checkpoints").fetchall() == original_checkpoints
