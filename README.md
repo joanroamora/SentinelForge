@@ -1,7 +1,7 @@
 # SentinelForge AI
 
 **Multi-Agent Security Analysis Platform**  
-**Estado:** vertical slice ficticio de CLI/API/web con expediente SQLite local; todavía no existe un motor de escaneo funcional.
+**Estado:** workspace local con detector Python acotado, corroboración de la fuente e investigación del origen del comando mediante asignaciones simples en una función, con comprobador separado. Expedientes SQLite versionados y contexto humano sin verificar. Disponible por CLI/API/web, con una demo simulada identificada.
 
 ## Misión
 
@@ -37,10 +37,54 @@ Un flujo vertical demostrable: un proyecto Python de prueba es recibido por CLI 
 - [Iteración 2: expediente SQLite local](docs/05_ITERACION_2_PERSISTENCIA_SQLITE.md)
 - [Consultar y editar el historial desde la web](docs/06_HISTORIAL_WEB.md)
 - [Confiabilidad HTTP y CI](docs/07_CONFIABILIDAD_HTTP_Y_CI.md)
+- [Ciclo simulado persistente: estados y recuperación](docs/08_CICLO_DEMO_PERSISTENTE.md)
+- [Investigación y verificación simuladas](docs/09_INVESTIGACION_SIMULADA.md)
+- [Monitor mínimo persistente](docs/10_MONITOR_PERSISTENTE.md)
+- [Primer detector Python local](docs/11_DETECTOR_PYTHON_LOCAL.md)
+- [Expedientes reales, workspace y CLI visual](docs/12_EXPEDIENTES_Y_WORKSPACE.md)
+- [Corroboración de señales con la fuente original](docs/13_CORROBORACION_DE_FUENTES.md)
+- [Origen del comando y comprobación por paso](docs/14_ORIGEN_DEL_COMANDO.md)
+- [ADR 0009: origen local del comando](docs/adr/0009-origen-local-del-comando.md)
+- [ADR 0008: corroboración estática](docs/adr/0008-corroboracion-estatica-de-fuentes.md)
+- [ADR 0007: expedientes y presentación](docs/adr/0007-expedientes-reales-y-presentacion.md)
+- [ADR 0006: detector local y contrato separado](docs/adr/0006-detector-python-local.md)
+- [ADR 0005: Monitor y respuestas inmutables](docs/adr/0005-monitor-minimo-persistente.md)
+- [ADR 0004: roles simulados y trazas](docs/adr/0004-roles-simulados-y-trazas.md)
 - [ADR 0001: persistencia local con SQLite](docs/adr/0001-persistencia-sqlite-local.md)
 - [Mapa visual del estado actual](docs/diagrams/estado-actual.svg)
 - [Reglas permanentes para Codex](AGENTS.md)
 - [Primer encargo para Codex](prompts/01_PRIMERA_ITERACION_CODEX.md)
+
+## Inspeccionar un archivo Python local
+
+Con el entorno existente, desde la raíz de trabajo actual:
+
+```powershell
+.\.venv\Scripts\python.exe -m sentinelforge.cli scan-file tests/fixtures/local_scan/shell_enabled.py
+```
+
+`scan-file` lee un `.py` relativo de hasta 64 KiB y observa llamadas reconocidas a `subprocess` con `shell=True` literal. No importa ni ejecuta el archivo. Devuelve hash, ubicación y señales sin verificar; no demuestra explotabilidad ni garantiza seguridad cuando no encuentra coincidencias. No guarda el resultado en SQLite. Consulta [alcance, errores y límites](docs/11_DETECTOR_PYTHON_LOCAL.md).
+
+Para guardar el expediente y consultarlo en la web local:
+
+```powershell
+.\.venv\Scripts\python.exe -m sentinelforge.cli scan tests/fixtures/local_scan/shell_enabled.py --format pretty
+.\.venv\Scripts\python.exe -m sentinelforge.cli scans --format pretty
+```
+
+La web acepta un archivo elegido por el usuario, conserva resultados y contexto humano y descarta el código fuente tras procesarlo. La CLI usa tablas en terminales y JSON en pipes; `--format json` lo fuerza explícitamente. Más detalles en [workspace y expedientes](docs/12_EXPEDIENTES_Y_WORKSPACE.md).
+
+Para ver el emblema **SF 3D** girando sobre su eje vertical:
+
+```powershell
+.\.venv\Scripts\python.exe -m sentinelforge.cli logo --seconds 6 --format pretty
+```
+
+La animación aparece brevemente en los resultados visuales. `--no-animation` antes del comando la desactiva; pipes y JSON mantienen su salida sin animación.
+
+Para corroborar un expediente, usar el archivo original con `scan-verify ID ARCHIVO --submission-id UUID --format pretty` o la sección **Corroboración de la fuente** en la web. Se compara el hash y se revisa el patrón con una implementación separada. El resultado crea una nueva revisión; no confirma explotabilidad ni verifica las declaraciones humanas. Consulta [alcance y ejemplos](docs/13_CORROBORACION_DE_FUENTES.md).
+
+Después de corroborar, `scan-trace ID ARCHIVO --submission-id UUID --format pretty` o **Origen del comando** en la web reconstruye asignaciones simples dentro de una función y contrasta los pasos con otra estrategia. El diagrama y el árbol de terminal distinguen recorridos reproducidos, inconclusos y no reproducidos. Se guardan identificadores y ubicaciones, sin valores literales ni código. Consulta [límites, contrato y ejemplos](docs/14_ORIGEN_DEL_COMANDO.md).
 
 ## Ejecutar la demo local
 
@@ -79,6 +123,8 @@ export SENTINELFORGE_DATABASE_PATH=.local/sentinelforge.sqlite3
 ```
 
 La web queda en `http://127.0.0.1:8000/` y la documentación HTTP en `http://127.0.0.1:8000/docs`.
+
+El [ciclo simulado persistente](docs/08_CICLO_DEMO_PERSISTENTE.md) permite iniciar, consultar y avanzar fases desde CLI/API, recuperando el progreso tras reiniciar. Sus fases son marcadores de demostración; el reporte se publica al completar el ciclo.
 
 Detalles: [vertical slice](docs/04_ITERACION_1_VERTICAL_SLICE.md) y [persistencia local](docs/05_ITERACION_2_PERSISTENCIA_SQLITE.md).
 

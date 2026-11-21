@@ -71,3 +71,10 @@ Crear datasets con verdad conocida. Medir por severidad y familia de riesgo: TP,
 - Explicación sencilla de arquitectura y decisiones.
 - Una evaluación académica de 3-5 preguntas para el usuario.
 - Notas sobre costos, riesgos y limitaciones.
+
+
+## Avance local: origen del comando (20 nov 2026)
+
+Ya existen detector Python acotado, corroboración de fuente original e investigación determinista del origen del comando dentro de una función, con comprobador separado. CLI/API/web comparten motor y expedientes versionados. Esta capa está documentada en [Origen del comando](14_ORIGEN_DEL_COMANDO.md); aún no cubre flujo entre funciones, sanitizadores o alcanzabilidad, ni mide precisión/recall con un dataset representativo.
+
+Antes de ampliar el alcance, decidir la siguiente iteración: corpus etiquetado de casos positivos, negativos e inconclusos y métricas reproducibles; después evaluar qué ampliación aporta evidencia útil. GCP y la ejecución aislada de artefactos continúan como etapas posteriores que requieren diseño y autorización.

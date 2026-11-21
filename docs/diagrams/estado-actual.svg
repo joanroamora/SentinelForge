@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1040" viewBox="0 0 1440 1040" role="img" aria-labelledby="title desc">
   <title id="title">SentinelForge — estado actual del proyecto</title>
-  <desc id="desc">CLI, API y web usan el mismo AnalysisService para generar reportes ficticios, guardados en SQLite con revisiones inmutables y eventos append-only. Muestra el entorno local, pruebas, ramas y trabajo pendiente.</desc>
+  <desc id="desc">CLI, API y web comparten AnalysisService para el detector Python local y la demo identificada. ScanCase conserva revisiones SQLite, hash, señales y contexto humano sin verificar. El workspace muestra historial y estados reales; la CLI ofrece tablas, paneles y JSON. Incluye hipótesis del origen del comando y comprobación independiente de asignaciones en una función.</desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#0b1220"/>
@@ -36,15 +36,16 @@
   </g>
   <text x="116" y="63" class="white" font-size="18" font-weight="700" letter-spacing="1.3">SENTINELFORGE</text>
   <text x="56" y="126" class="white" font-size="38" font-weight="700">Estado actual del proyecto</text>
-  <text x="58" y="158" class="muted" font-size="17">Demo persistente · historial web · confiabilidad HTTP · 20 nov 2026</text>
+  <text x="58" y="158" class="muted" font-size="17">Detector, fuente y origen del comando · expediente auditable · 20 nov 2026</text>
   <rect x="1138" y="54" width="244" height="42" rx="21" fill="#193b36" stroke="#276c61"/>
   <circle cx="1164" cy="75" r="5" fill="#54e0bd"/>
   <text x="1180" y="80" fill="#b9f5e5" font-size="13" font-weight="700" letter-spacing="1">MVP EN CONSTRUCCIÓN</text>
 
   <!-- Main flow panel -->
   <rect x="48" y="195" width="865" height="568" rx="22" class="card"/>
-  <text x="80" y="237" class="teal label">FLUJO ACTUAL</text>
-  <text x="80" y="266" class="white" font-size="22" font-weight="700">Una lógica compartida, tres entradas</text>
+  <text x="80" y="237" class="teal label">PRODUCTO LOCAL</text>
+  <text x="80" y="266" class="white" font-size="22" font-weight="700">Un servicio compartido, tres entradas</text>
+  <text x="80" y="298" class="teal" font-size="14">CLI / API / web → ScanCase real · recorrido contrastado y contexto sin verificar</text>
 
   <!-- Connectors behind the cards -->
   <path d="M279 365 C320 365 320 412 355 412" fill="none" stroke="#42d6b0" stroke-width="2.5" marker-end="url(#arrow)"/>
@@ -56,9 +57,9 @@
   <g>
     <rect x="80" y="323" width="200" height="84" rx="15" fill="#19283b" stroke="#344a63"/>
     <rect x="98" y="342" width="34" height="34" rx="9" fill="#25445a"/>
-    <text x="115" y="365" text-anchor="middle" fill="#a8def4" font-size="17" font-weight="700">$</text>
+    <text x="115" y="365" text-anchor="middle" fill="#a8def4" font-size="15" font-weight="700">SF</text>
     <text x="148" y="355" class="white" font-size="17" font-weight="700">CLI</text>
-    <text x="148" y="379" class="muted small">sentinelforge demo</text>
+    <text x="148" y="379" class="muted small">scan · scan-report</text>
 
     <rect x="80" y="434" width="200" height="84" rx="15" fill="#19283b" stroke="#344a63"/>
     <rect x="98" y="453" width="34" height="34" rx="9" fill="#25445a"/>
@@ -71,7 +72,7 @@
     <rect x="105" y="571" width="20" height="15" rx="2" fill="none" stroke="#a8def4" stroke-width="2"/>
     <path d="M110 590h10" stroke="#a8def4" stroke-width="2" stroke-linecap="round"/>
     <text x="148" y="577" class="white" font-size="17" font-weight="700">Web mínima</text>
-    <text x="148" y="601" class="muted small">Historial y notas</text>
+    <text x="148" y="601" class="muted small">Workspace y contexto</text>
   </g>
 
   <!-- Shared engine -->
@@ -80,27 +81,27 @@
   <path d="M394 394h16M394 400h16M394 406h10" stroke="#d7fff4" stroke-width="2" stroke-linecap="round"/>
   <text x="432" y="398" class="teal label">MOTOR COMPARTIDO</text>
   <text x="385" y="451" class="white" font-size="23" font-weight="700">AnalysisService</text>
-  <text x="385" y="482" fill="#b2c7d1" font-size="15">Crea el mismo contrato</text>
-  <text x="385" y="504" fill="#b2c7d1" font-size="15">de reporte para cada interfaz.</text>
+  <text x="385" y="482" fill="#b2c7d1" font-size="15">Demo y detector local</text>
+  <text x="385" y="504" fill="#b2c7d1" font-size="15">con contratos diferenciados.</text>
 
   <!-- Report -->
   <rect x="656" y="359" width="225" height="174" rx="20" fill="#202239" stroke="#51527b" stroke-width="1.5"/>
   <rect x="681" y="383" width="34" height="34" rx="10" fill="#393b69"/>
   <path d="M691 391h14v18h-14zM694 396h8M694 401h8M694 406h5" fill="none" stroke="#d7d7ff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
   <text x="728" y="398" fill="#c9c9ff" class="label">SALIDA</text>
-  <text x="681" y="451" class="white" font-size="22" font-weight="700">AnalysisReport</text>
-  <text x="681" y="482" fill="#c2c4d9" font-size="15">JSON · esquema 1.0</text>
-  <text x="681" y="504" fill="#c2c4d9" font-size="15">demo marcada como ficticia</text>
+  <text x="681" y="451" class="white" font-size="22" font-weight="700">Demo / ScanCase</text>
+  <text x="681" y="482" fill="#c2c4d9" font-size="15">JSON · ScanCase hasta 1.2</text>
+  <text x="681" y="504" fill="#c2c4d9" font-size="15">Real y demo identificados</text>
 
   <path d="M768 536 L768 554" fill="none" stroke="#42d6b0" stroke-width="2.5" marker-end="url(#arrow)"/>
   <rect x="656" y="560" width="225" height="86" rx="16" fill="#1a3030" stroke="#3b8277" stroke-width="1.5"/>
   <text x="681" y="590" class="teal label">PERSISTENCIA LOCAL</text>
-  <text x="681" y="615" class="white" font-size="17" font-weight="700">SQLite · historial HTTP</text>
-  <text x="681" y="635" class="muted" font-size="12">Eventos append-only</text>
+  <text x="681" y="615" class="white" font-size="17" font-weight="700">SQLite · esquema 7</text>
+  <text x="681" y="635" class="muted" font-size="12">Checkpoints, preguntas y eventos</text>
 
   <rect x="80" y="674" width="801" height="54" rx="13" fill="#111b2b" stroke="#25344a"/>
   <circle cx="103" cy="701" r="5" fill="#54e0bd"/>
-  <text x="120" y="706" fill="#c8d4e5" font-size="15">Los adaptadores presentan la salida; la valoración vive en el servicio compartido.</text>
+  <text x="120" y="706" fill="#c8d4e5" font-size="13">RECEIVED → DETECTING → INVESTIGATING → VERIFYING → REPORTING → COMPLETED</text>
 
   <!-- Right: verified state -->
   <rect x="937" y="195" width="455" height="290" rx="22" class="card"/>
@@ -112,13 +113,13 @@
     <text x="1001" y="312" fill="#dce6f2">Python 3.14.10 · dependencias en <tspan fill="#72edcd">.venv</tspan></text>
 
     <circle cx="980" cy="348" r="10" fill="#1c4d45"/><path d="m975 348 4 4 7-8" fill="none" stroke="#72edcd" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-    <text x="1001" y="353" fill="#dce6f2">14 pruebas pasan · Ruff sin errores</text>
+    <text x="1001" y="353" fill="#dce6f2">301 pruebas pasan · 2 omitidas por SO</text>
 
     <circle cx="980" cy="389" r="10" fill="#1c4d45"/><path d="m975 389 4 4 7-8" fill="none" stroke="#72edcd" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-    <text x="1001" y="394" fill="#dce6f2">HTTP responde durante esperas del servicio</text>
+    <text x="1001" y="394" fill="#dce6f2">Ruff limpio · sin instalaciones globales</text>
 
     <circle cx="980" cy="430" r="10" fill="#1c4d45"/><path d="m975 430 4 4 7-8" fill="none" stroke="#72edcd" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-    <text x="1001" y="435" fill="#dce6f2">CI verificada · Linux y Windows · 4 entornos</text>
+    <text x="1001" y="435" fill="#dce6f2">Origen contrastado · alcance acotado</text>
   </g>
 
   <!-- Report contents -->
@@ -127,37 +128,37 @@
   <text x="969" y="581" class="white" font-size="22" font-weight="700">Todo está etiquetado</text>
   <rect x="969" y="606" width="188" height="37" rx="10" fill="#332936" stroke="#654456"/>
   <circle cx="989" cy="624" r="5" fill="#ff9c9c"/>
-  <text x="1003" y="629" fill="#ffd5d5" font-size="14" font-weight="600">Hallazgo ficticio</text>
+  <text x="1003" y="629" fill="#ffd5d5" font-size="14" font-weight="600">Demo identificada</text>
   <rect x="1167" y="606" width="195" height="37" rx="10" fill="#2e2b3e" stroke="#514a69"/>
   <circle cx="1187" cy="624" r="5" fill="#c3b4ff"/>
-  <text x="1201" y="629" fill="#ded7ff" font-size="14" font-weight="600">Evidencia simulada</text>
+  <text x="1201" y="629" fill="#ded7ff" font-size="14" font-weight="600">Señal estática real</text>
   <rect x="969" y="653" width="205" height="37" rx="10" fill="#332e20" stroke="#635539"/>
   <circle cx="989" cy="671" r="5" fill="#ffd166"/>
   <text x="1003" y="676" fill="#ffe6a9" font-size="14" font-weight="600">Declaración unverified</text>
-  <text x="969" y="724" class="muted" font-size="14">No inspecciona ni ejecuta artefactos de usuarios.</text>
+  <text x="969" y="724" class="muted" font-size="14">Señales reales y declaraciones: sin verificar.</text>
 
   <!-- Roadmap -->
   <rect x="48" y="791" width="1344" height="164" rx="22" fill="#121d2d" stroke="#26354c" stroke-width="1.5"/>
-  <text x="80" y="834" fill="#ffd166" class="label">SIGUIENTES CAPAS · DEMO PERSISTENTE YA DISPONIBLE</text>
+  <text x="80" y="834" fill="#ffd166" class="label">CAPAS DISPONIBLES Y PRÓXIMOS PASOS</text>
   <g>
     <rect x="80" y="858" width="230" height="63" rx="13" fill="#193b36" stroke="#276c61"/>
-    <text x="101" y="885" fill="#b9f5e5" font-size="16" font-weight="700">SQLite local ✓</text>
-    <text x="101" y="906" fill="#95cdbd" class="small">Reportes y eventos</text>
+    <text x="101" y="885" fill="#b9f5e5" font-size="16" font-weight="700">Investigación simulada ✓</text>
+    <text x="101" y="906" fill="#95cdbd" class="small">Fuentes y trazas guardadas</text>
 
     <path d="M320 889h38" stroke="#58647a" stroke-width="2" marker-end="url(#arrow)" opacity=".65"/>
-    <rect x="370" y="858" width="230" height="63" rx="13" fill="#1b2534" stroke="#394351"/>
-    <text x="391" y="885" class="white" font-size="16" font-weight="700">Escáneres reales</text>
-    <text x="391" y="906" class="muted small">Fixtures seguras y vulnerables</text>
+    <rect x="370" y="858" width="230" height="63" rx="13" fill="#193b36" stroke="#276c61"/>
+    <text x="391" y="885" fill="#b9f5e5" font-size="16" font-weight="700">Monitor humano ✓</text>
+    <text x="391" y="906" fill="#95cdbd" class="small">Respuestas inmutables</text>
 
     <path d="M610 889h38" stroke="#58647a" stroke-width="2" marker-end="url(#arrow)" opacity=".65"/>
-    <rect x="660" y="858" width="230" height="63" rx="13" fill="#1b2534" stroke="#394351"/>
-    <text x="681" y="885" class="white" font-size="16" font-weight="700">Orquestación</text>
-    <text x="681" y="906" class="muted small">Agentes simulados primero</text>
+    <rect x="660" y="858" width="230" height="63" rx="13" fill="#193b36" stroke="#276c61"/>
+    <text x="681" y="885" fill="#b9f5e5" font-size="16" font-weight="700">Detector local ✓</text>
+    <text x="681" y="906" fill="#95cdbd" class="small">Detección y corroboración</text>
 
     <path d="M900 889h38" stroke="#58647a" stroke-width="2" marker-end="url(#arrow)" opacity=".65"/>
-    <rect x="950" y="858" width="230" height="63" rx="13" fill="#1b2534" stroke="#394351"/>
-    <text x="971" y="885" class="white" font-size="16" font-weight="700">Monitor humano</text>
-    <text x="971" y="906" class="muted small">Pregunta, verifica, reanuda</text>
+    <rect x="950" y="858" width="230" height="63" rx="13" fill="#193b36" stroke="#276c61"/>
+    <text x="971" y="885" class="white" font-size="16" font-weight="700">Origen del comando ✓</text>
+    <text x="971" y="906" class="muted small">Asignaciones en una función</text>
 
     <path d="M1190 889h38" stroke="#58647a" stroke-width="2" marker-end="url(#arrow)" opacity=".65"/>
     <rect x="1240" y="858" width="120" height="63" rx="13" fill="#302b20" stroke="#665632"/>
@@ -168,7 +169,7 @@
   <!-- Git footer -->
   <rect x="48" y="977" width="1344" height="43" rx="13" fill="#0e1725" stroke="#243248"/>
   <text x="72" y="1004" class="muted" font-size="13" font-weight="700" letter-spacing="1">GIT</text>
-  <text x="122" y="1004" fill="#d8e3ef" font-size="13">GitHub: PR #3 · web + HTTP + CI</text>
+  <text x="122" y="1004" fill="#d8e3ef" font-size="13">GitHub: PR #3 integrado</text>
   <circle cx="352" cy="998" r="3" fill="#71829b"/>
-  <text x="450" y="1004" fill="#ffd166" font-size="13">feature/http-reliability-ci: publicada · PR #3 hacia dev</text>
+  <text x="450" y="1004" fill="#ffd166" font-size="13">codex/argument-lineage · origen local</text>
 </svg>
