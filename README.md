@@ -1,7 +1,7 @@
 # SentinelForge AI
 
 **Multi-Agent Security Analysis Platform**  
-**Estado:** demo CLI/API/web con ciclo SQLite recuperable y Monitor persistente; primer detector Python local disponible por CLI para una regla estática acotada. Su resultado real todavía no se integra al ciclo simulado ni al historial web.
+**Estado:** workspace local con detector Python acotado por CLI/API/web, expedientes SQLite versionados y contexto humano sin verificar. Incluye una demo simulada identificada y una CLI visual con salida JSON para automatización.
 
 ## Misión
 
@@ -41,6 +41,8 @@ Un flujo vertical demostrable: un proyecto Python de prueba es recibido por CLI 
 - [Investigación y verificación simuladas](docs/09_INVESTIGACION_SIMULADA.md)
 - [Monitor mínimo persistente](docs/10_MONITOR_PERSISTENTE.md)
 - [Primer detector Python local](docs/11_DETECTOR_PYTHON_LOCAL.md)
+- [Expedientes reales, workspace y CLI visual](docs/12_EXPEDIENTES_Y_WORKSPACE.md)
+- [ADR 0007: expedientes y presentación](docs/adr/0007-expedientes-reales-y-presentacion.md)
 - [ADR 0006: detector local y contrato separado](docs/adr/0006-detector-python-local.md)
 - [ADR 0005: Monitor y respuestas inmutables](docs/adr/0005-monitor-minimo-persistente.md)
 - [ADR 0004: roles simulados y trazas](docs/adr/0004-roles-simulados-y-trazas.md)
@@ -57,7 +59,16 @@ Con el entorno existente, desde la raíz de trabajo actual:
 .\.venv\Scripts\python.exe -m sentinelforge.cli scan-file tests/fixtures/local_scan/shell_enabled.py
 ```
 
-`scan-file` lee un `.py` relativo de hasta 64 KiB y observa llamadas reconocidas a `subprocess` con `shell=True` literal. No importa ni ejecuta el archivo. Devuelve JSON con hash, ubicación y señales sin verificar; no demuestra explotabilidad ni garantiza seguridad cuando no encuentra coincidencias. No guarda el resultado en SQLite. Consulta [alcance, errores y límites](docs/11_DETECTOR_PYTHON_LOCAL.md).
+`scan-file` lee un `.py` relativo de hasta 64 KiB y observa llamadas reconocidas a `subprocess` con `shell=True` literal. No importa ni ejecuta el archivo. Devuelve hash, ubicación y señales sin verificar; no demuestra explotabilidad ni garantiza seguridad cuando no encuentra coincidencias. No guarda el resultado en SQLite. Consulta [alcance, errores y límites](docs/11_DETECTOR_PYTHON_LOCAL.md).
+
+Para guardar el expediente y consultarlo en la web local:
+
+```powershell
+.\.venv\Scripts\python.exe -m sentinelforge.cli scan tests/fixtures/local_scan/shell_enabled.py --format pretty
+.\.venv\Scripts\python.exe -m sentinelforge.cli scans --format pretty
+```
+
+La web acepta un archivo elegido por el usuario, conserva resultados y contexto humano y descarta el código fuente tras procesarlo. La CLI usa tablas en terminales y JSON en pipes; `--format json` lo fuerza explícitamente. Más detalles en [workspace y expedientes](docs/12_EXPEDIENTES_Y_WORKSPACE.md).
 
 ## Ejecutar la demo local
 

@@ -11,7 +11,12 @@ from typing import Literal, Self
 from pydantic import Field, ValidationError, model_validator
 
 from .contracts import Contract
-from .local_source import LocalSourceError, load_local_source
+from .local_source import (
+    MAX_SOURCE_BYTES,
+    LocalSourceError,
+    load_local_source,
+    normalize_source_label,
+)
 
 DETECTOR_VERSION = "1.0"
 WORKER_TIMEOUT_SECONDS = 5
@@ -25,7 +30,7 @@ LIMITATIONS = (
     "Cero señales significa que esta regla no encontró coincidencias, no que el archivo sea seguro.",
     ("No ejecuta ni importa el artefacto. El proceso del parser tiene tiempo límite, "
      "pero no es un sandbox de permisos ni impone una cuota dura de memoria."),
-    "El resultado se devuelve al cliente; todavía no se incorpora al expediente SQLite ni a Monitor.",
+    "El detector no verifica contexto humano ni confirma vulnerabilidades.",
 )
 
 
@@ -115,6 +120,17 @@ def scan_local_file(root: Path, relative_path: str) -> LocalScanReport:
         label, content = load_local_source(root, relative_path)
     except LocalSourceError as error:
         return LocalScanReport(status="ERROR", errors=[LocalScanError(code=error.code)])
+    return scan_source_bytes(label, content)
+
+
+def scan_source_bytes(label: str, content: bytes) -> LocalScanReport:
+    """Same detector for selected browser bytes and local files; never open the label."""
+    try:
+        label = normalize_source_label(label)
+    except LocalSourceError as error:
+        return LocalScanReport(status="ERROR", errors=[LocalScanError(code=error.code)])
+    if len(content) > MAX_SOURCE_BYTES:
+        return LocalScanReport(status="ERROR", errors=[LocalScanError(code="source_too_large")])
 
     source = LocalSourceManifest(
         relative_path=label, sha256=hashlib.sha256(content).hexdigest(), size_bytes=len(content)

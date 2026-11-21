@@ -83,6 +83,11 @@ def _checked_root(root: Path) -> tuple[Path, dict[Path, tuple[int, ...]]]:
         raise LocalSourceError("root_invalid") from error
 
 
+def normalize_source_label(relative_path: str) -> str:
+    """Validate an artifact label without opening any host path."""
+    return "/".join(_relative_parts(relative_path))
+
+
 def load_local_source(root: Path, relative_path: str) -> tuple[str, bytes]:
     """Return a relative POSIX label and bytes, without importing their code."""
     parts = _relative_parts(relative_path)

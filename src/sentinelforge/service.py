@@ -15,9 +15,10 @@ from .demo_fixture import (
     STATEMENT_QUESTION,
     STATEMENT_TEXT,
 )
-from .local_scan import LocalScanReport, scan_local_file
+from .local_scan import LocalScanReport, scan_local_file, scan_source_bytes
 from .monitor import MonitorAnswerReceipt, MonitorAnswerRequest, MonitorQuestion
 from .repository import ReportConflictError, SQLiteReportRepository
+from .scan_case import ScanAnswerReceipt, ScanCase
 from .simulation import DemoFixtureId, SimulationStartRequest, SimulationTrace
 from .workflow import WorkflowCheckpoint
 
@@ -31,6 +32,21 @@ class AnalysisService:
     def scan_local_file(self, relative_path: str, *, root: Path | None = None) -> LocalScanReport:
         """Inspect one file relative to the caller's authorized local root; do not persist it."""
         return scan_local_file(Path.cwd() if root is None else root, relative_path)
+
+    def create_local_scan(self, relative_path: str, *, root: Path | None = None) -> ScanCase:
+        return self._repository.save_local_scan(self.scan_local_file(relative_path, root=root))
+
+    def create_source_scan(self, label: str, content: bytes) -> ScanCase:
+        return self._repository.save_local_scan(scan_source_bytes(label, content))
+
+    def get_local_scan(self, analysis_id: str, revision: int | None = None) -> ScanCase | None:
+        return self._repository.get_local_scan(analysis_id, revision)
+
+    def list_local_scans(self, *, limit: int = 25, offset: int = 0) -> list[ScanCase]:
+        return self._repository.list_local_scans(limit=limit, offset=offset)
+
+    def answer_local_scan(self, analysis_id: str, request: MonitorAnswerRequest) -> ScanAnswerReceipt:
+        return self._repository.answer_local_scan(analysis_id, request)
 
     def create_demo_analysis(self) -> AnalysisReport:
         report = self._build_demo_report(Analysis())

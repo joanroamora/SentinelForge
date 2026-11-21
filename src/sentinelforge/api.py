@@ -1,12 +1,16 @@
 """FastAPI adapter over the shared AnalysisService."""
 
+import asyncio
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi import Path as PathParameter
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from starlette.concurrency import run_in_threadpool
 
 from .contracts import AnalysisReport, DemoRevisionRequest, ReportRevision
+from .local_source import MAX_SOURCE_BYTES, LocalSourceError, normalize_source_label
 from .monitor import (
     MonitorAnswerReceipt,
     MonitorAnswerRequest,
@@ -14,6 +18,7 @@ from .monitor import (
     MonitorQuestion,
 )
 from .repository import ReportConflictError
+from .scan_case import ScanAnswerReceipt, ScanCase
 from .service import AnalysisService
 from .simulation import SimulationStartRequest, SimulationTrace
 from .web import WEB_PAGE
@@ -25,8 +30,54 @@ def create_app(
     *,
     database_path: str | Path | None = None,
 ) -> FastAPI:
-    app = FastAPI(title="SentinelForge demo", version="0.1.0")
+    app = FastAPI(title="SentinelForge · Local workspace", version="0.2.0")
     app.state.analysis_service = service or AnalysisService(database_path)
+    app.mount("/assets", StaticFiles(directory=Path(__file__).with_name("static")), name="assets")
+    scanner_slots = asyncio.Semaphore(2)
+
+    @app.post("/v1/local-scans", response_model=ScanCase)
+    async def scan_upload(request: Request, filename: str = Query(max_length=1024)) -> ScanCase:
+        if request.headers.get("content-type", "").split(";")[0] != "application/octet-stream":
+            raise HTTPException(status_code=415, detail="expected_octet_stream")
+        origin = request.headers.get("origin")
+        if origin and origin != str(request.base_url).rstrip("/"):
+            raise HTTPException(status_code=403, detail="origin_not_allowed")
+        try:
+            label = normalize_source_label(filename)
+        except LocalSourceError as error:
+            raise HTTPException(status_code=422, detail=error.code) from error
+        if scanner_slots.locked():
+            raise HTTPException(status_code=503, detail="scanner_busy")
+        async with scanner_slots:
+            content = bytearray()
+            async for chunk in request.stream():
+                if len(content) + len(chunk) > MAX_SOURCE_BYTES:
+                    raise HTTPException(status_code=413, detail="source_too_large")
+                content.extend(chunk)
+            return await run_in_threadpool(
+                app.state.analysis_service.create_source_scan, label, bytes(content)
+            )
+
+    @app.get("/v1/local-scans", response_model=list[ScanCase])
+    def scan_history(limit: int = Query(default=25, ge=1, le=100),
+                     offset: int = Query(default=0, ge=0)) -> list[ScanCase]:
+        return app.state.analysis_service.list_local_scans(limit=limit, offset=offset)
+
+    @app.get("/v1/local-scans/{analysis_id}", response_model=ScanCase)
+    def scan_detail(analysis_id: str, revision: int | None = Query(default=None, ge=1)) -> ScanCase:
+        case = app.state.analysis_service.get_local_scan(analysis_id, revision)
+        if case is None:
+            raise HTTPException(status_code=404, detail="local_scan_not_found")
+        return case
+
+    @app.post("/v1/local-scans/{analysis_id}/answers", response_model=ScanAnswerReceipt)
+    def scan_answer(analysis_id: str, request: MonitorAnswerRequest) -> ScanAnswerReceipt:
+        try:
+            return app.state.analysis_service.answer_local_scan(analysis_id, request)
+        except LookupError as error:
+            raise HTTPException(status_code=404, detail="scan_question_not_found") from error
+        except MonitorConflictError as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
 
     @app.get("/health")
     async def health() -> dict[str, str]:

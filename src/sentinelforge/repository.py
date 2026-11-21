@@ -12,6 +12,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from .contracts import AnalysisReport, ReportRevision
+from .local_scan import LocalScanReport
 from .monitor import (
     MonitorAnswerReceipt,
     MonitorAnswerRequest,
@@ -21,10 +22,11 @@ from .monitor import (
     make_monitor_question,
     make_monitor_statement,
 )
+from .scan_case import ScanAnswerReceipt, ScanCase, answer_scan_case, new_scan_case
 from .simulation import SimulationTrace, advance_simulation, enrich_demo_report
 from .workflow import WorkflowCheckpoint, WorkflowConflictError, next_checkpoint
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 DEFAULT_DATABASE_PATH = Path(".sentinelforge/analyses.sqlite3")
 
 
@@ -58,7 +60,7 @@ class SQLiteReportRepository:
         version = connection.execute("PRAGMA user_version").fetchone()[0]
         if version == SCHEMA_VERSION:
             return
-        if version not in (0, 1, 2, 3):
+        if version not in (0, 1, 2, 3, 4):
             raise RuntimeError(f"unsupported_database_schema_version:{version}")
 
         connection.execute("BEGIN IMMEDIATE")
@@ -204,9 +206,39 @@ class SQLiteReportRepository:
                             BEGIN SELECT RAISE(ABORT, '{table}_are_immutable'); END
                             """
                         )
-                connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
-            elif version != SCHEMA_VERSION:
+                version = 4
+            if version == 4:
+                connection.execute("""
+                    CREATE TABLE local_scan_revisions (
+                        analysis_id TEXT NOT NULL,
+                        revision INTEGER NOT NULL CHECK (revision > 0),
+                        record_json TEXT NOT NULL,
+                        created_at TEXT NOT NULL,
+                        PRIMARY KEY (analysis_id, revision)
+                    )
+                """)
+                connection.execute("""
+                    CREATE TABLE local_scan_submissions (
+                        submission_id TEXT PRIMARY KEY,
+                        analysis_id TEXT NOT NULL,
+                        revision INTEGER NOT NULL,
+                        request_json TEXT NOT NULL,
+                        receipt_json TEXT NOT NULL,
+                        FOREIGN KEY (analysis_id, revision)
+                            REFERENCES local_scan_revisions (analysis_id, revision)
+                    )
+                """)
+                for table in ("local_scan_revisions", "local_scan_submissions"):
+                    for operation in ("UPDATE", "DELETE"):
+                        connection.execute(f"""
+                            CREATE TRIGGER {table}_no_{operation.lower()}
+                            BEFORE {operation} ON {table}
+                            BEGIN SELECT RAISE(ABORT, '{table}_are_immutable'); END
+                        """)
+                version = 5
+            if version != SCHEMA_VERSION:
                 raise RuntimeError(f"unsupported_database_schema_version:{version}")
+            connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             connection.commit()
         except Exception:
             connection.rollback()
@@ -214,6 +246,96 @@ class SQLiteReportRepository:
 
     def save_report(self, report: AnalysisReport) -> None:
         self.append_report_revision(report, expected_revision=0)
+
+    @staticmethod
+    def _read_scan(connection, analysis_id: str, revision: int | None = None) -> ScanCase | None:
+        row = connection.execute(
+            "SELECT record_json FROM local_scan_revisions "
+            "WHERE analysis_id = ? AND (? IS NULL OR revision = ?) ORDER BY revision DESC LIMIT 1",
+            (analysis_id, revision, revision),
+        ).fetchone()
+        return None if row is None else ScanCase.model_validate_json(row[0])
+
+    def _insert_scan(self, connection, case: ScanCase) -> None:
+        connection.execute(
+            "INSERT INTO local_scan_revisions VALUES (?, ?, ?, ?)",
+            (case.id, case.revision, case.model_dump_json(), case.created_at.isoformat()),
+        )
+        self._append_event(connection, case.id, "local_scan_revision_created",
+                           {"revision": case.revision, "status": case.status})
+
+    def save_local_scan(self, report: LocalScanReport) -> ScanCase:
+        initial = new_scan_case(report)
+        with self._connection() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                existing = self._read_scan(connection, initial.id)
+                if existing is not None:
+                    if existing.report != report:
+                        raise ReportConflictError("local_scan_fingerprint_conflict")
+                    connection.commit()
+                    return existing
+                self._insert_scan(connection, initial)
+                connection.commit()
+                return initial
+            except Exception:
+                connection.rollback()
+                raise
+
+    def get_local_scan(self, analysis_id: str, revision: int | None = None) -> ScanCase | None:
+        with self._connection() as connection:
+            return self._read_scan(connection, analysis_id, revision)
+
+    def list_local_scans(self, *, limit: int = 25, offset: int = 0) -> list[ScanCase]:
+        if not 1 <= limit <= 100 or offset < 0:
+            raise ValueError("invalid_scan_pagination")
+        with self._connection() as connection:
+            rows = connection.execute("""
+                SELECT r.record_json FROM local_scan_revisions r
+                JOIN (SELECT analysis_id, MAX(revision) AS revision FROM local_scan_revisions
+                      GROUP BY analysis_id) latest
+                  ON r.analysis_id = latest.analysis_id AND r.revision = latest.revision
+                ORDER BY r.created_at DESC, r.analysis_id LIMIT ? OFFSET ?
+            """, (limit, offset)).fetchall()
+        return [ScanCase.model_validate_json(row[0]) for row in rows]
+
+    def answer_local_scan(self, analysis_id: str, request: MonitorAnswerRequest) -> ScanAnswerReceipt:
+        with self._connection() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                current = self._read_scan(connection, analysis_id)
+                if current is None or current.question is None:
+                    raise LookupError("scan_question_not_found")
+                previous = connection.execute(
+                    "SELECT analysis_id, request_json, receipt_json FROM local_scan_submissions "
+                    "WHERE submission_id = ?", (str(request.submission_id),),
+                ).fetchone()
+                if previous is not None:
+                    if (previous["analysis_id"] != analysis_id or
+                            previous["request_json"] != request.model_dump_json()):
+                        raise MonitorConflictError("monitor_submission_conflict")
+                    connection.commit()
+                    return ScanAnswerReceipt.model_validate_json(previous["receipt_json"])
+                if current.human_statements:
+                    raise MonitorConflictError("monitor_question_already_answered")
+                revised = answer_scan_case(current, request)
+                self._insert_scan(connection, revised)
+                receipt = ScanAnswerReceipt(
+                    analysis_id=analysis_id, submission_id=request.submission_id,
+                    question_id=current.question.id, revision=revised.revision,
+                    statement=revised.human_statements[0],
+                )
+                connection.execute("INSERT INTO local_scan_submissions VALUES (?, ?, ?, ?, ?)",
+                                   (str(request.submission_id), analysis_id, revised.revision,
+                                    request.model_dump_json(), receipt.model_dump_json()))
+                self._append_event(connection, analysis_id, "local_scan_context_received",
+                                   {"submission_id": str(request.submission_id),
+                                    "verification_status": "unverified"})
+                connection.commit()
+                return receipt
+            except Exception:
+                connection.rollback()
+                raise
 
     def append_report_revision(
         self,

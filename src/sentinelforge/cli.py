@@ -1,6 +1,5 @@
 """Typer CLI adapter over the shared AnalysisService."""
 
-import json
 from enum import Enum
 from typing import Annotated, cast
 from uuid import UUID
@@ -11,9 +10,11 @@ from pydantic import ValidationError
 from .monitor import MonitorAnswerRequest, MonitorConflictError
 from .service import AnalysisService
 from .simulation import DemoFixtureId
+from .terminal import OUTPUT_FORMAT, OutputFormat, console, emit, human_output
 from .workflow import WorkflowConflictError
 
-app = typer.Typer(help="Demo y análisis estático local acotado de SentinelForge.")
+app = typer.Typer(help="Demo y análisis estático local acotado de SentinelForge.",
+                  pretty_exceptions_show_locals=False)
 
 
 class DemoFixtureOption(str, Enum):
@@ -23,25 +24,75 @@ class DemoFixtureOption(str, Enum):
 
 
 @app.callback()
-def main() -> None:
+def main(output: Annotated[OutputFormat, typer.Option("--format")] = OutputFormat.auto) -> None:
     """CLI de SentinelForge AI."""
+    OUTPUT_FORMAT.set(output)
 
 
 @app.command()
-def scan_file(file: str) -> None:
+def scan_file(file: str, output: Annotated[OutputFormat, typer.Option("--format")] = OutputFormat.auto) -> None:
     """Inspecciona un .py relativo al directorio actual sin ejecutar su código."""
     report = AnalysisService().scan_local_file(file)
-    # ASCII JSON stays valid under legacy Windows pipe encodings; values round-trip via JSON.
-    typer.echo(json.dumps(report.model_dump(mode="json"), indent=2, ensure_ascii=True))
+    emit(report, output)
     if report.status == "ERROR":
         raise typer.Exit(code=2)
+
+
+@app.command()
+def scan(file: str, output: Annotated[OutputFormat, typer.Option("--format")] = OutputFormat.auto) -> None:
+    """Analiza un .py y guarda un expediente local recuperable."""
+    try:
+        if human_output(output):
+            with console().status("Inspeccionando archivo y guardando expediente…", spinner="dots"):
+                case = AnalysisService().create_local_scan(file)
+        else:
+            case = AnalysisService().create_local_scan(file)
+    except ValueError as error:
+        typer.echo(str(error), err=True)
+        raise typer.Exit(code=2) from error
+    emit(case, output)
+    if case.status == "ERROR":
+        raise typer.Exit(code=2)
+
+
+@app.command()
+def scans(limit: Annotated[int, typer.Option(min=1, max=100)] = 25,
+          offset: Annotated[int, typer.Option(min=0)] = 0,
+          output: Annotated[OutputFormat, typer.Option("--format")] = OutputFormat.auto) -> None:
+    """Lista expedientes reales guardados en esta base local."""
+    emit(AnalysisService().list_local_scans(limit=limit, offset=offset), output)
+
+
+@app.command()
+def scan_report(analysis_id: str, revision: Annotated[int | None, typer.Option(min=1)] = None,
+                output: Annotated[OutputFormat, typer.Option("--format")] = OutputFormat.auto) -> None:
+    """Recupera la última revisión o una revisión histórica de un expediente real."""
+    case = AnalysisService().get_local_scan(analysis_id, revision)
+    if case is None:
+        typer.echo("local_scan_not_found", err=True)
+        raise typer.Exit(code=2)
+    emit(case, output)
+
+
+@app.command()
+def scan_answer(analysis_id: str, submission_id: Annotated[UUID, typer.Option()],
+                actor: Annotated[str, typer.Option()], role: Annotated[str, typer.Option()],
+                text: Annotated[str, typer.Option()]) -> None:
+    """Guarda una respuesta humana sin verificar; nunca espera stdin."""
+    try:
+        receipt = AnalysisService().answer_local_scan(analysis_id, MonitorAnswerRequest(
+            submission_id=submission_id, actor=actor, role=role, text=text))
+    except (ValidationError, LookupError, MonitorConflictError) as error:
+        typer.echo("invalid_monitor_answer" if isinstance(error, ValidationError) else str(error), err=True)
+        raise typer.Exit(code=2) from error
+    emit(receipt)
 
 
 @app.command()
 def demo() -> None:
     """Imprime un reporte ficticio; no analiza el proyecto actual."""
     report = AnalysisService().create_demo_analysis()
-    typer.echo(report.model_dump_json(indent=2))
+    emit(report)
 
 
 @app.command()
@@ -53,7 +104,7 @@ def workflow_start(
     checkpoint = AnalysisService().create_demo_workflow(
         fixture_id=cast(DemoFixtureId, fixture_id.value), monitored=monitored
     )
-    typer.echo(checkpoint.model_dump_json(indent=2))
+    emit(checkpoint)
 
 
 @app.command()
@@ -64,7 +115,7 @@ def workflow_questions(analysis_id: str) -> None:
     except LookupError as error:
         typer.echo("analysis_not_found", err=True)
         raise typer.Exit(code=2) from error
-    typer.echo("[" + ",\n".join(question.model_dump_json(indent=2) for question in questions) + "]")
+    emit(questions)
 
 
 @app.command()
@@ -91,7 +142,7 @@ def workflow_answer(
     except MonitorConflictError as error:
         typer.echo(str(error), err=True)
         raise typer.Exit(code=2) from error
-    typer.echo(receipt.model_dump_json(indent=2))
+    emit(receipt)
 
 
 @app.command()
@@ -106,7 +157,7 @@ def workflow_investigation(
     if simulation is None:
         typer.echo("simulation_not_found", err=True)
         raise typer.Exit(code=2)
-    typer.echo(simulation.model_dump_json(indent=2))
+    emit(simulation)
 
 
 @app.command()
@@ -116,7 +167,7 @@ def workflow_status(analysis_id: str) -> None:
     if checkpoint is None:
         typer.echo("workflow_not_found", err=True)
         raise typer.Exit(code=2)
-    typer.echo(checkpoint.model_dump_json(indent=2))
+    emit(checkpoint)
 
 
 @app.command()
@@ -135,7 +186,7 @@ def workflow_advance(
     except WorkflowConflictError as error:
         typer.echo("workflow_version_conflict", err=True)
         raise typer.Exit(code=2) from error
-    typer.echo(checkpoint.model_dump_json(indent=2))
+    emit(checkpoint)
 
 
 if __name__ == "__main__":
