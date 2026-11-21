@@ -57,7 +57,7 @@
   <g>
     <rect x="80" y="323" width="200" height="84" rx="15" fill="#19283b" stroke="#344a63"/>
     <rect x="98" y="342" width="34" height="34" rx="9" fill="#25445a"/>
-    <text x="115" y="365" text-anchor="middle" fill="#a8def4" font-size="17" font-weight="700">$</text>
+    <text x="115" y="365" text-anchor="middle" fill="#a8def4" font-size="15" font-weight="700">SF</text>
     <text x="148" y="355" class="white" font-size="17" font-weight="700">CLI</text>
     <text x="148" y="379" class="muted small">scan · scan-report</text>
 
@@ -113,7 +113,7 @@
     <text x="1001" y="312" fill="#dce6f2">Python 3.14.10 · dependencias en <tspan fill="#72edcd">.venv</tspan></text>
 
     <circle cx="980" cy="348" r="10" fill="#1c4d45"/><path d="m975 348 4 4 7-8" fill="none" stroke="#72edcd" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-    <text x="1001" y="353" fill="#dce6f2">221 pruebas pasan · 2 omitidas por SO</text>
+    <text x="1001" y="353" fill="#dce6f2">230 pruebas pasan · 2 omitidas por SO</text>
 
     <circle cx="980" cy="389" r="10" fill="#1c4d45"/><path d="m975 389 4 4 7-8" fill="none" stroke="#72edcd" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
     <text x="1001" y="394" fill="#dce6f2">Ruff limpio · sin instalaciones globales</text>
@@ -171,5 +171,5 @@
   <text x="72" y="1004" class="muted" font-size="13" font-weight="700" letter-spacing="1">GIT</text>
   <text x="122" y="1004" fill="#d8e3ef" font-size="13">GitHub: PR #3 integrado</text>
   <circle cx="352" cy="998" r="3" fill="#71829b"/>
-  <text x="450" y="1004" fill="#ffd166" font-size="13">codex/persistent-scans-product-ui · nueva capa local</text>
+  <text x="450" y="1004" fill="#ffd166" font-size="13">codex/sf-terminal-animation · emblema 3D local</text>
 </svg>

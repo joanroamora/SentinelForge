@@ -16,6 +16,8 @@ from rich.progress_bar import ProgressBar
 from rich.table import Table
 from rich.text import Text
 
+from .terminal_logo import show_logo
+
 
 class OutputFormat(str, Enum):
     auto = "auto"
@@ -59,6 +61,7 @@ def emit(value, output: OutputFormat = OutputFormat.auto) -> None:
         return
     term = console()
     term.print()
+    show_logo(term)
     term.print(Text(" SENTINELFORGE  /  LOCAL WORKSPACE", style="bold cyan"))
     term.print(Text(" Evidencia antes que opinión.\n", style="dim"))
     if isinstance(data, list) and all(isinstance(item, dict) and "report" in item for item in data):

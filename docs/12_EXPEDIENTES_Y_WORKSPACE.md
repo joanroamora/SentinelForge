@@ -62,6 +62,26 @@ La CLI visual usa Rich 15.0.0, que ya estaba presente como dependencia de Typer 
 
 Una inspección exitosa, incluso `PARTIAL`, devuelve 0. Los errores técnicos devuelven 2. Un rechazo de entrada sin manifiesto no crea expediente y devuelve un código de error en stderr. No hay gate automático de seguridad para CI.
 
+### Emblema SF 3D
+
+La presentación visual incluye letras `SF` extruidas: un pequeño volumen se rota sobre el eje vertical **Y**, se proyecta en celdas de terminal y usa profundidad y luz para ocultar superficies y sombrearlas. Se calcula localmente con la biblioteca estándar y Rich existente; no es un vídeo ni requiere GPU, archivos descargados o paquetes adicionales.
+
+```powershell
+# Ver el emblema girar durante seis segundos en una terminal interactiva.
+.\.venv\Scripts\python.exe -m sentinelforge.cli logo --seconds 6 --format pretty
+
+# Mostrar un resultado con el emblema estático.
+.\.venv\Scripts\python.exe -m sentinelforge.cli --no-animation scans --format pretty
+```
+
+Los resultados visuales tienen una introducción de hasta 1,2 segundos. `logo` permite una duración entre 0,1 y 30 segundos y termina solo; `Ctrl+C` restaura el cursor. Es identidad visual, no una medida de progreso de análisis. El dibujo utiliza hasta 54×13 celdas, 48 posiciones por vuelta y como máximo 20 actualizaciones por segundo.
+
+Si se fuerza la presentación visual en pipes, CI, `TERM=dumb`, `NO_COLOR` o con `SENTINELFORGE_NO_ANIMATION=1`, el emblema queda estático y no añade espera. Con `--format json` se omite por completo de los reportes. Las terminales pequeñas usan un `SF` compacto; las que no soportan Unicode usan caracteres ASCII. No se modifica el código analizado ni su expediente.
+
+Validación del emblema: **230 pruebas aprobadas, 2 omitidas y Ruff limpio**. Los casos nuevos cubren proyección con profundidad, giro periódico, salida estática sin esperas, opciones CLI y recuperación del cursor ante interrupción. También se ejecutó el giro en una PTY interactiva de Windows, habilitando sus capacidades únicamente en ese proceso de prueba. La vista de la geometría está en `.local/product-preview/sf-logo.gif`: 48 fotogramas verificados, ignorados por Git.
+
+Pregunta de repaso: ¿por qué rotar un volumen y proyectarlo con profundidad produce un resultado distinto de estrechar una imagen plana? ¿Por qué una animación de marca nunca debe convertirse en progreso de seguridad ni contaminar JSON?
+
 ## Evidencia y aprendizaje
 
 Las pruebas cubren equivalencia CLI/API/servicio, reinicios, reintentos, concurrencia, conflictos, rollback, migración y conservación de tablas anteriores, límites de uploads, rechazo de origen, inmutabilidad, codificación cp1252 y texto manipulador. Los tests de symlinks/FIFO mantienen las limitaciones de plataforma ya documentadas.

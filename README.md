@@ -70,6 +70,14 @@ Para guardar el expediente y consultarlo en la web local:
 
 La web acepta un archivo elegido por el usuario, conserva resultados y contexto humano y descarta el código fuente tras procesarlo. La CLI usa tablas en terminales y JSON en pipes; `--format json` lo fuerza explícitamente. Más detalles en [workspace y expedientes](docs/12_EXPEDIENTES_Y_WORKSPACE.md).
 
+Para ver el emblema **SF 3D** girando sobre su eje vertical:
+
+```powershell
+.\.venv\Scripts\python.exe -m sentinelforge.cli logo --seconds 6 --format pretty
+```
+
+La animación aparece brevemente en los resultados visuales. `--no-animation` antes del comando la desactiva; pipes y JSON mantienen su salida sin animación.
+
 ## Ejecutar la demo local
 
 La demo crea un reporte sintético para comprobar que CLI y API comparten el mismo motor. No analiza ni ejecuta código, y no afirma detectar vulnerabilidades.

@@ -11,6 +11,7 @@ from .monitor import MonitorAnswerRequest, MonitorConflictError
 from .service import AnalysisService
 from .simulation import DemoFixtureId
 from .terminal import OUTPUT_FORMAT, OutputFormat, console, emit, human_output
+from .terminal_logo import ANIMATION_ENABLED, show_logo
 from .workflow import WorkflowConflictError
 
 app = typer.Typer(help="Demo y análisis estático local acotado de SentinelForge.",
@@ -24,9 +25,26 @@ class DemoFixtureOption(str, Enum):
 
 
 @app.callback()
-def main(output: Annotated[OutputFormat, typer.Option("--format")] = OutputFormat.auto) -> None:
+def main(output: Annotated[OutputFormat, typer.Option("--format")] = OutputFormat.auto,
+         no_animation: Annotated[bool, typer.Option("--no-animation")] = False) -> None:
     """CLI de SentinelForge AI."""
     OUTPUT_FORMAT.set(output)
+    ANIMATION_ENABLED.set(not no_animation)
+
+
+@app.command()
+def logo(seconds: Annotated[float, typer.Option(min=0.1, max=30)] = 6,
+         output: Annotated[OutputFormat, typer.Option("--format")] = OutputFormat.auto) -> None:
+    """Muestra el emblema SF 3D girando sobre el eje vertical; no ejecuta análisis."""
+    if not human_output(output):
+        emit({"logo": "SF", "axis": "Y", "animation": False}, OutputFormat.json)
+        return
+    term = console()
+    try:
+        show_logo(term, seconds=seconds)
+    except KeyboardInterrupt as error:
+        raise typer.Exit(code=130) from error
+    term.print(" SENTINELFORGE / LOCAL WORKSPACE", style="bold cyan")
 
 
 @app.command()
