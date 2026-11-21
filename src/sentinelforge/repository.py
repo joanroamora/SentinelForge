@@ -12,10 +12,19 @@ from pathlib import Path
 from uuid import uuid4
 
 from .contracts import AnalysisReport, ReportRevision
+from .monitor import (
+    MonitorAnswerReceipt,
+    MonitorAnswerRequest,
+    MonitorConflictError,
+    MonitorQuestion,
+    apply_monitor_report,
+    make_monitor_question,
+    make_monitor_statement,
+)
 from .simulation import SimulationTrace, advance_simulation, enrich_demo_report
 from .workflow import WorkflowCheckpoint, WorkflowConflictError, next_checkpoint
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 DEFAULT_DATABASE_PATH = Path(".sentinelforge/analyses.sqlite3")
 
 
@@ -49,7 +58,7 @@ class SQLiteReportRepository:
         version = connection.execute("PRAGMA user_version").fetchone()[0]
         if version == SCHEMA_VERSION:
             return
-        if version not in (0, 1, 2):
+        if version not in (0, 1, 2, 3):
             raise RuntimeError(f"unsupported_database_schema_version:{version}")
 
         connection.execute("BEGIN IMMEDIATE")
@@ -161,6 +170,40 @@ class SQLiteReportRepository:
                         END
                         """
                     )
+                version = 3
+            if version == 3:
+                connection.execute(
+                    """
+                    CREATE TABLE monitor_questions (
+                        question_id TEXT PRIMARY KEY,
+                        analysis_id TEXT NOT NULL UNIQUE,
+                        checkpoint_version INTEGER NOT NULL DEFAULT 1 CHECK (checkpoint_version = 1),
+                        question_json TEXT NOT NULL,
+                        FOREIGN KEY (analysis_id, checkpoint_version)
+                            REFERENCES workflow_checkpoints (analysis_id, version)
+                    )
+                    """
+                )
+                connection.execute(
+                    """
+                    CREATE TABLE monitor_answers (
+                        submission_id TEXT PRIMARY KEY,
+                        question_id TEXT NOT NULL UNIQUE,
+                        request_json TEXT NOT NULL,
+                        receipt_json TEXT NOT NULL,
+                        FOREIGN KEY (question_id) REFERENCES monitor_questions (question_id)
+                    )
+                    """
+                )
+                for table in ("monitor_questions", "monitor_answers"):
+                    for operation in ("UPDATE", "DELETE"):
+                        connection.execute(
+                            f"""
+                            CREATE TRIGGER {table}_no_{operation.lower()}
+                            BEFORE {operation} ON {table}
+                            BEGIN SELECT RAISE(ABORT, '{table}_are_immutable'); END
+                            """
+                        )
                 connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             elif version != SCHEMA_VERSION:
                 raise RuntimeError(f"unsupported_database_schema_version:{version}")
@@ -229,10 +272,16 @@ class SQLiteReportRepository:
         workflow = self._read_checkpoint(connection, report.analysis.id)
         if workflow is not None and workflow.state != "COMPLETED":
             raise WorkflowConflictError("workflow_report_not_ready")
-        if workflow is not None and revision == 1:
+        if workflow is not None:
             trace = self._read_simulation(connection, report.analysis.id, workflow.version)
             if trace is not None:
                 report = enrich_demo_report(report, trace)
+        question = self._read_monitor_question(connection, report.analysis.id)
+        if question is not None:
+            answer = self._read_monitor_answer(connection, question.id)
+            report = apply_monitor_report(
+                report, question, None if answer is None else answer.statement
+            )
         connection.execute(
             """
             INSERT INTO report_revisions (analysis_id, revision, report_json, created_at)
@@ -306,7 +355,8 @@ class SQLiteReportRepository:
             return self._read_simulation(connection, analysis_id, checkpoint_version)
 
     def create_workflow(
-        self, checkpoint: WorkflowCheckpoint, *, simulation: SimulationTrace | None = None
+        self, checkpoint: WorkflowCheckpoint, *, simulation: SimulationTrace | None = None,
+        monitored: bool = False,
     ) -> None:
         if checkpoint.version != 1:
             raise WorkflowConflictError("workflow_must_start_at_received")
@@ -318,6 +368,8 @@ class SQLiteReportRepository:
                     if (
                         existing != checkpoint
                         or self._read_simulation(connection, checkpoint.analysis_id, 1) != simulation
+                        or (self._read_monitor_question(connection, checkpoint.analysis_id) is not None)
+                        != monitored
                     ):
                         raise WorkflowConflictError("workflow_id_conflict")
                 else:
@@ -330,6 +382,19 @@ class SQLiteReportRepository:
                     self._insert_checkpoint(connection, checkpoint)
                     if simulation is not None:
                         self._insert_simulation(connection, checkpoint, simulation)
+                    if monitored:
+                        question = make_monitor_question(checkpoint.analysis_id, checkpoint.created_at)
+                        connection.execute(
+                            """
+                            INSERT INTO monitor_questions (question_id, analysis_id, question_json)
+                            VALUES (?, ?, ?)
+                            """,
+                            (question.id, checkpoint.analysis_id, question.model_dump_json()),
+                        )
+                        self._append_event(
+                            connection, checkpoint.analysis_id, "monitor_question_created",
+                            {"question_id": question.id, "finding_id": question.finding_id},
+                        )
                 connection.commit()
             except Exception:
                 connection.rollback()
@@ -386,6 +451,97 @@ class SQLiteReportRepository:
     def get_report(self, analysis_id: str) -> AnalysisReport | None:
         result = self.get_revision(analysis_id)
         return None if result is None else result.report
+
+    @staticmethod
+    def _read_monitor_question(
+        connection: sqlite3.Connection, analysis_id: str, question_id: str | None = None
+    ) -> MonitorQuestion | None:
+        row = connection.execute(
+            """
+            SELECT question_json FROM monitor_questions
+            WHERE analysis_id = ? AND (? IS NULL OR question_id = ?)
+            """,
+            (analysis_id, question_id, question_id),
+        ).fetchone()
+        return None if row is None else MonitorQuestion.model_validate_json(row[0])
+
+    @staticmethod
+    def _read_monitor_answer(
+        connection: sqlite3.Connection, question_id: str
+    ) -> MonitorAnswerReceipt | None:
+        row = connection.execute(
+            "SELECT receipt_json FROM monitor_answers WHERE question_id = ?", (question_id,)
+        ).fetchone()
+        return None if row is None else MonitorAnswerReceipt.model_validate_json(row[0])
+
+    def get_monitor_questions(self, analysis_id: str) -> list[MonitorQuestion]:
+        with self._connection() as connection:
+            exists = connection.execute(
+                """
+                SELECT 1 FROM workflow_checkpoints WHERE analysis_id = ?
+                UNION ALL SELECT 1 FROM report_revisions WHERE analysis_id = ? LIMIT 1
+                """, (analysis_id, analysis_id),
+            ).fetchone()
+            if exists is None:
+                raise LookupError("analysis_not_found")
+            question = self._read_monitor_question(connection, analysis_id)
+            if question is None:
+                return []
+            answer = self._read_monitor_answer(connection, question.id)
+            if answer is not None:
+                question = MonitorQuestion.model_validate(
+                    question.model_dump() | {"status": "answered", "answer": answer.statement}
+                )
+            return [question]
+
+    def answer_monitor_question(
+        self, analysis_id: str, question_id: str, request: MonitorAnswerRequest
+    ) -> MonitorAnswerReceipt:
+        request_json = request.model_dump_json()
+        with self._connection() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                question = self._read_monitor_question(connection, analysis_id, question_id)
+                if question is None:
+                    raise LookupError("monitor_question_not_found")
+                replay = connection.execute(
+                    "SELECT question_id, request_json, receipt_json FROM monitor_answers "
+                    "WHERE submission_id = ?", (str(request.submission_id),),
+                ).fetchone()
+                if replay is not None:
+                    if replay["question_id"] != question_id or replay["request_json"] != request_json:
+                        raise MonitorConflictError("monitor_submission_conflict")
+                    connection.commit()
+                    return MonitorAnswerReceipt.model_validate_json(replay["receipt_json"])
+                if self._read_monitor_answer(connection, question_id) is not None:
+                    raise MonitorConflictError("monitor_question_already_answered")
+                latest = connection.execute(
+                    "SELECT revision, report_json FROM report_revisions WHERE analysis_id = ? "
+                    "ORDER BY revision DESC LIMIT 1", (analysis_id,),
+                ).fetchone()
+                revision = None if latest is None else latest["revision"] + 1
+                receipt = MonitorAnswerReceipt(
+                    question_id=question_id, submission_id=request.submission_id,
+                    statement=make_monitor_statement(question, request), report_revision=revision,
+                )
+                connection.execute(
+                    "INSERT INTO monitor_answers VALUES (?, ?, ?, ?)",
+                    (str(request.submission_id), question_id, request_json, receipt.model_dump_json()),
+                )
+                self._append_event(
+                    connection, analysis_id, "monitor_answer_recorded",
+                    {"question_id": question_id, "submission_id": str(request.submission_id),
+                     "verification_status": "unverified"},
+                )
+                if latest is not None:
+                    self._insert_report_revision(
+                        connection, AnalysisReport.model_validate_json(latest["report_json"]), revision
+                    )
+                connection.commit()
+                return receipt
+            except Exception:
+                connection.rollback()
+                raise
 
     def get_revision(
         self, analysis_id: str, revision: int | None = None

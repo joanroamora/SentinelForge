@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1040" viewBox="0 0 1440 1040" role="img" aria-labelledby="title desc">
   <title id="title">SentinelForge — estado actual del proyecto</title>
-  <desc id="desc">CLI, API y web usan el mismo AnalysisService para generar reportes ficticios, guardados en SQLite con revisiones inmutables y eventos append-only. Muestra el entorno local, pruebas, ramas y trabajo pendiente.</desc>
+  <desc id="desc">CLI, API y web comparten AnalysisService, investigación simulada y Monitor persistente. Las respuestas humanas siguen sin verificar y los informes Monitor son parciales. SQLite conserva revisiones, preguntas y eventos. Muestra el entorno local, pruebas, ramas y trabajo pendiente.</desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#0b1220"/>
@@ -36,7 +36,7 @@
   </g>
   <text x="116" y="63" class="white" font-size="18" font-weight="700" letter-spacing="1.3">SENTINELFORGE</text>
   <text x="56" y="126" class="white" font-size="38" font-weight="700">Estado actual del proyecto</text>
-  <text x="58" y="158" class="muted" font-size="17">Investigación y verificación sobre fixtures · trazas persistentes · 20 nov 2026</text>
+  <text x="58" y="158" class="muted" font-size="17">Investigación sobre fixtures · Monitor persistente · 20 nov 2026</text>
   <rect x="1138" y="54" width="244" height="42" rx="21" fill="#193b36" stroke="#276c61"/>
   <circle cx="1164" cy="75" r="5" fill="#54e0bd"/>
   <text x="1180" y="80" fill="#b9f5e5" font-size="13" font-weight="700" letter-spacing="1">MVP EN CONSTRUCCIÓN</text>
@@ -71,7 +71,7 @@
     <rect x="105" y="571" width="20" height="15" rx="2" fill="none" stroke="#a8def4" stroke-width="2"/>
     <path d="M110 590h10" stroke="#a8def4" stroke-width="2" stroke-linecap="round"/>
     <text x="148" y="577" class="white" font-size="17" font-weight="700">Web mínima</text>
-    <text x="148" y="601" class="muted small">Historial y notas</text>
+    <text x="148" y="601" class="muted small">Historial y Monitor</text>
   </g>
 
   <!-- Shared engine -->
@@ -95,8 +95,8 @@
   <path d="M768 536 L768 554" fill="none" stroke="#42d6b0" stroke-width="2.5" marker-end="url(#arrow)"/>
   <rect x="656" y="560" width="225" height="86" rx="16" fill="#1a3030" stroke="#3b8277" stroke-width="1.5"/>
   <text x="681" y="590" class="teal label">PERSISTENCIA LOCAL</text>
-  <text x="681" y="615" class="white" font-size="17" font-weight="700">SQLite · checkpoints</text>
-  <text x="681" y="635" class="muted" font-size="12">Eventos append-only</text>
+  <text x="681" y="615" class="white" font-size="17" font-weight="700">SQLite · esquema 4</text>
+  <text x="681" y="635" class="muted" font-size="12">Checkpoints, preguntas y eventos</text>
 
   <rect x="80" y="674" width="801" height="54" rx="13" fill="#111b2b" stroke="#25344a"/>
   <circle cx="103" cy="701" r="5" fill="#54e0bd"/>
@@ -112,13 +112,13 @@
     <text x="1001" y="312" fill="#dce6f2">Python 3.14.10 · dependencias en <tspan fill="#72edcd">.venv</tspan></text>
 
     <circle cx="980" cy="348" r="10" fill="#1c4d45"/><path d="m975 348 4 4 7-8" fill="none" stroke="#72edcd" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-    <text x="1001" y="353" fill="#dce6f2">72 pruebas pasan · Ruff sin errores</text>
+    <text x="1001" y="353" fill="#dce6f2">104 pruebas pasan · Ruff sin errores</text>
 
     <circle cx="980" cy="389" r="10" fill="#1c4d45"/><path d="m975 389 4 4 7-8" fill="none" stroke="#72edcd" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
     <text x="1001" y="394" fill="#dce6f2">Señal, hipótesis y verificación separadas</text>
 
     <circle cx="980" cy="430" r="10" fill="#1c4d45"/><path d="m975 430 4 4 7-8" fill="none" stroke="#72edcd" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-    <text x="1001" y="435" fill="#dce6f2">Fuentes y hashes cotejados; fixtures locales</text>
+    <text x="1001" y="435" fill="#dce6f2">Monitor continúa sin esperar teclado</text>
   </g>
 
   <!-- Report contents -->
@@ -134,20 +134,20 @@
   <rect x="969" y="653" width="205" height="37" rx="10" fill="#332e20" stroke="#635539"/>
   <circle cx="989" cy="671" r="5" fill="#ffd166"/>
   <text x="1003" y="676" fill="#ffe6a9" font-size="14" font-weight="600">Declaración unverified</text>
-  <text x="969" y="724" class="muted" font-size="14">No inspecciona ni ejecuta artefactos de usuarios.</text>
+  <text x="969" y="724" class="muted" font-size="14">Monitor: informe PARTIAL, incluso tras responder.</text>
 
   <!-- Roadmap -->
   <rect x="48" y="791" width="1344" height="164" rx="22" fill="#121d2d" stroke="#26354c" stroke-width="1.5"/>
-  <text x="80" y="834" fill="#ffd166" class="label">SIGUIENTES CAPAS · DEMO PERSISTENTE YA DISPONIBLE</text>
+  <text x="80" y="834" fill="#ffd166" class="label">CAPAS DISPONIBLES Y PRÓXIMOS PASOS</text>
   <g>
     <rect x="80" y="858" width="230" height="63" rx="13" fill="#193b36" stroke="#276c61"/>
     <text x="101" y="885" fill="#b9f5e5" font-size="16" font-weight="700">Investigación simulada ✓</text>
     <text x="101" y="906" fill="#95cdbd" class="small">Fuentes y trazas guardadas</text>
 
     <path d="M320 889h38" stroke="#58647a" stroke-width="2" marker-end="url(#arrow)" opacity=".65"/>
-    <rect x="370" y="858" width="230" height="63" rx="13" fill="#1b2534" stroke="#394351"/>
-    <text x="391" y="885" class="white" font-size="16" font-weight="700">Monitor humano</text>
-    <text x="391" y="906" class="muted small">Preguntas y respuestas</text>
+    <rect x="370" y="858" width="230" height="63" rx="13" fill="#193b36" stroke="#276c61"/>
+    <text x="391" y="885" fill="#b9f5e5" font-size="16" font-weight="700">Monitor humano ✓</text>
+    <text x="391" y="906" fill="#95cdbd" class="small">Respuestas inmutables</text>
 
     <path d="M610 889h38" stroke="#58647a" stroke-width="2" marker-end="url(#arrow)" opacity=".65"/>
     <rect x="660" y="858" width="230" height="63" rx="13" fill="#1b2534" stroke="#394351"/>
@@ -168,7 +168,7 @@
   <!-- Git footer -->
   <rect x="48" y="977" width="1344" height="43" rx="13" fill="#0e1725" stroke="#243248"/>
   <text x="72" y="1004" class="muted" font-size="13" font-weight="700" letter-spacing="1">GIT</text>
-  <text x="122" y="1004" fill="#d8e3ef" font-size="13">GitHub: PR #3 · web + HTTP + CI</text>
+  <text x="122" y="1004" fill="#d8e3ef" font-size="13">GitHub: PR #3 integrado</text>
   <circle cx="352" cy="998" r="3" fill="#71829b"/>
-  <text x="450" y="1004" fill="#ffd166" font-size="13">feature/simulated-investigation: nueva capa local</text>
+  <text x="450" y="1004" fill="#ffd166" font-size="13">feature/persistent-monitor · capas nuevas todavía locales</text>
 </svg>

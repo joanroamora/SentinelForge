@@ -7,6 +7,12 @@ from fastapi import Path as PathParameter
 from fastapi.responses import HTMLResponse
 
 from .contracts import AnalysisReport, DemoRevisionRequest, ReportRevision
+from .monitor import (
+    MonitorAnswerReceipt,
+    MonitorAnswerRequest,
+    MonitorConflictError,
+    MonitorQuestion,
+)
 from .repository import ReportConflictError
 from .service import AnalysisService
 from .simulation import SimulationStartRequest, SimulationTrace
@@ -83,7 +89,33 @@ def create_app(
     @app.post("/v1/demo-workflows", response_model=WorkflowCheckpoint, status_code=201)
     def start_workflow(request: SimulationStartRequest | None = None) -> WorkflowCheckpoint:
         fixture_id = "auth-disabled" if request is None else request.fixture_id
-        return app.state.analysis_service.create_demo_workflow(fixture_id=fixture_id)
+        monitored = False if request is None else request.monitored
+        return app.state.analysis_service.create_demo_workflow(
+            fixture_id=fixture_id, monitored=monitored
+        )
+
+    @app.get("/v1/analyses/{analysis_id}/questions", response_model=list[MonitorQuestion])
+    def get_monitor_questions(analysis_id: str) -> list[MonitorQuestion]:
+        try:
+            return app.state.analysis_service.get_monitor_questions(analysis_id)
+        except LookupError as error:
+            raise HTTPException(status_code=404, detail="analysis_not_found") from error
+
+    @app.post(
+        "/v1/analyses/{analysis_id}/questions/{question_id}/answers",
+        response_model=MonitorAnswerReceipt,
+    )
+    def answer_monitor_question(
+        analysis_id: str, question_id: str, request: MonitorAnswerRequest
+    ) -> MonitorAnswerReceipt:
+        try:
+            return app.state.analysis_service.answer_monitor_question(
+                analysis_id, question_id, request
+            )
+        except LookupError as error:
+            raise HTTPException(status_code=404, detail="monitor_question_not_found") from error
+        except MonitorConflictError as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
 
     @app.get(
         "/v1/demo-workflows/{analysis_id}/investigation", response_model=SimulationTrace

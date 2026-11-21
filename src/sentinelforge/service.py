@@ -15,6 +15,7 @@ from .demo_fixture import (
     STATEMENT_QUESTION,
     STATEMENT_TEXT,
 )
+from .monitor import MonitorAnswerReceipt, MonitorAnswerRequest, MonitorQuestion
 from .repository import ReportConflictError, SQLiteReportRepository
 from .simulation import DemoFixtureId, SimulationStartRequest, SimulationTrace
 from .workflow import WorkflowCheckpoint
@@ -66,14 +67,23 @@ class AnalysisService:
         return report
 
     def create_demo_workflow(
-        self, fixture_id: DemoFixtureId = "auth-disabled"
+        self, fixture_id: DemoFixtureId = "auth-disabled", *, monitored: bool = False
     ) -> WorkflowCheckpoint:
-        request = SimulationStartRequest(fixture_id=fixture_id)
+        request = SimulationStartRequest(fixture_id=fixture_id, monitored=monitored)
         checkpoint = WorkflowCheckpoint()
         self._repository.create_workflow(
-            checkpoint, simulation=SimulationTrace(fixture_id=request.fixture_id)
+            checkpoint, simulation=SimulationTrace(fixture_id=request.fixture_id),
+            monitored=request.monitored,
         )
         return checkpoint
+
+    def get_monitor_questions(self, analysis_id: str) -> list[MonitorQuestion]:
+        return self._repository.get_monitor_questions(analysis_id)
+
+    def answer_monitor_question(
+        self, analysis_id: str, question_id: str, request: MonitorAnswerRequest
+    ) -> MonitorAnswerReceipt:
+        return self._repository.answer_monitor_question(analysis_id, question_id, request)
 
     def get_simulation(
         self, analysis_id: str, *, checkpoint_version: int | None = None

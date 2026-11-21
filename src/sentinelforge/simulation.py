@@ -20,6 +20,7 @@ FIXTURE_SOURCES = MappingProxyType({
 
 class SimulationStartRequest(Contract):
     fixture_id: DemoFixtureId = "auth-disabled"
+    monitored: bool = Field(default=False, strict=True)
 
 
 class MockSignal(Contract):

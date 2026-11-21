@@ -2,9 +2,12 @@
 
 from enum import Enum
 from typing import Annotated, cast
+from uuid import UUID
 
 import typer
+from pydantic import ValidationError
 
+from .monitor import MonitorAnswerRequest, MonitorConflictError
 from .service import AnalysisService
 from .simulation import DemoFixtureId
 from .workflow import WorkflowConflictError
@@ -33,12 +36,51 @@ def demo() -> None:
 @app.command()
 def workflow_start(
     fixture_id: Annotated[DemoFixtureOption, typer.Option()] = DemoFixtureOption.auth_disabled,
+    monitored: Annotated[bool, typer.Option()] = False,
 ) -> None:
     """Inicia un ciclo simulado persistente; no ejecuta escáneres."""
     checkpoint = AnalysisService().create_demo_workflow(
-        fixture_id=cast(DemoFixtureId, fixture_id.value)
+        fixture_id=cast(DemoFixtureId, fixture_id.value), monitored=monitored
     )
     typer.echo(checkpoint.model_dump_json(indent=2))
+
+
+@app.command()
+def workflow_questions(analysis_id: str) -> None:
+    """Lista preguntas persistentes sin esperar entrada interactiva."""
+    try:
+        questions = AnalysisService().get_monitor_questions(analysis_id)
+    except LookupError as error:
+        typer.echo("analysis_not_found", err=True)
+        raise typer.Exit(code=2) from error
+    typer.echo("[" + ",\n".join(question.model_dump_json(indent=2) for question in questions) + "]")
+
+
+@app.command()
+def workflow_answer(
+    analysis_id: str,
+    question_id: str,
+    submission_id: Annotated[UUID, typer.Option()],
+    actor: Annotated[str, typer.Option()],
+    role: Annotated[str, typer.Option()],
+    text: Annotated[str, typer.Option()],
+) -> None:
+    """Registra una declaración humana sin promoverla a evidencia confirmada."""
+    try:
+        request = MonitorAnswerRequest(
+            submission_id=submission_id, actor=actor, role=role, text=text
+        )
+        receipt = AnalysisService().answer_monitor_question(analysis_id, question_id, request)
+    except ValidationError as error:
+        typer.echo("invalid_monitor_answer", err=True)
+        raise typer.Exit(code=2) from error
+    except LookupError as error:
+        typer.echo("monitor_question_not_found", err=True)
+        raise typer.Exit(code=2) from error
+    except MonitorConflictError as error:
+        typer.echo(str(error), err=True)
+        raise typer.Exit(code=2) from error
+    typer.echo(receipt.model_dump_json(indent=2))
 
 
 @app.command()
