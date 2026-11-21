@@ -84,3 +84,7 @@ Antes de ampliar el alcance, decidir la siguiente iteración: corpus etiquetado 
 La [evaluación local](15_EVALUACION_LOCAL.md) incorpora 28 casos sintéticos con referencias fijas, sin auditoría independiente. Mide presencia por caso, localización por señal, cobertura/acuerdo de trazado, inconclusos y tiempo. Separa 23 casos del alcance actual, 3 fronteras con omisiones conocidas y 2 errores de entrada; un fallo técnico no cuenta como negativo. La CLI produce tablas o JSON y no crea expedientes.
 
 La primera línea base reproduce 16 de 19 señales de referencia, con 3 omisiones visibles y 4 trazados inconclusos entre los 16 realizados. Revisar las etiquetas y ampliar el corpus con ejemplos independientes precede a cualquier afirmación de calidad general. El próximo cambio funcional puede seleccionarse entre las limitaciones observadas, sin ampliar todos los dominios simultáneamente.
+
+## Avance local: primera mejora medida (21 nov 2026)
+
+El motor 1.1 incorpora [imports directos dentro de funciones](16_IMPORTS_LOCALES.md), junto con corroboración independiente y trazado compatible. Sobre el corpus 1.0 intacto, se reproducen 17 de 19 señales y recorridos, frente a 16 anteriores; quedan dos omisiones y cuatro resultados inconclusos. Se conservan revisiones de componentes 1.0, sin migrar SQLite ni modificar el significado de las señales.

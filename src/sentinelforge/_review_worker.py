@@ -55,6 +55,72 @@ def imported_target(root, call_position, tree, nodes, symbols):
     return bindings[0][0]
 
 
+def function_import_target(root, call, parents, nodes, symbols):
+    """Check the compiler's local symbol, original imports and mutations independently."""
+    child, owner = call, parents.get(call)
+    while owner is not None and not isinstance(owner, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        if isinstance(owner, (ast.ClassDef, ast.Lambda, ast.ListComp, ast.SetComp,
+                              ast.DictComp, ast.GeneratorExp)):
+            return None
+        child, owner = owner, parents.get(owner)
+    if owner is None or child not in owner.body:
+        return None
+    pending, matches = list(symbols.get_children()), []
+    while pending:
+        table = pending.pop()
+        pending.extend(table.get_children())
+        if table.get_type() == "function" and table.get_name() == owner.name and table.get_lineno() == owner.lineno:
+            matches.append(table)
+    if len(matches) != 1 or root not in matches[0].get_identifiers():
+        return None
+    table = matches[0]
+    entry = table.lookup(root)
+    if (not entry.is_imported() or entry.is_assigned() or entry.is_parameter() or
+            entry.is_global() or entry.is_nonlocal() or entry.is_namespace() or
+            any(getattr(item, "name", None) == root for item in getattr(owner, "type_params", []))):
+        return None
+    nested = list(table.get_children())
+    while nested:
+        descendant = nested.pop()
+        nested.extend(descendant.get_children())
+        if root in descendant.get_identifiers():
+            symbol = descendant.lookup(root)
+            if symbol.is_imported() or symbol.is_assigned() or symbol.is_parameter() or symbol.is_local():
+                return None
+    bindings = []
+    for statement in owner.body:
+        if not isinstance(statement, (ast.Import, ast.ImportFrom)):
+            continue
+        for alias in statement.names:
+            name = alias.asname or (alias.name.split(".")[0] if isinstance(statement, ast.Import) else alias.name)
+            if name != root:
+                continue
+            target = ("subprocess" if alias.name == "subprocess" else None) if isinstance(statement, ast.Import) else (
+                "subprocess." + alias.name if statement.module == "subprocess" and statement.level == 0
+                and alias.name in FUNCTIONS else None)
+            bindings.append((target, (statement.lineno, statement.col_offset)))
+    if (not bindings or bindings[0][0] is None or
+            any(target != bindings[0][0] for target, _ in bindings) or
+            not any(position < (call.lineno, call.col_offset) for _, position in bindings)):
+        return None
+    for node in ast.walk(owner):
+        if isinstance(node, (ast.Global, ast.Nonlocal)) and root in node.names:
+            return None
+        if isinstance(node, (ast.Import, ast.ImportFrom)) and node not in owner.body:
+            for alias in node.names:
+                name = alias.asname or (alias.name.split(".")[0] if isinstance(node, ast.Import) else alias.name)
+                if name in {root, "*"}:
+                    return None
+    for node in nodes:
+        if isinstance(node, (ast.Attribute, ast.Subscript)) and isinstance(node.ctx, (ast.Store, ast.Del)):
+            base = node.value
+            while isinstance(base, (ast.Attribute, ast.Subscript)):
+                base = base.value
+            if isinstance(base, ast.Name) and base.id == root:
+                return None
+    return bindings[0][0]
+
+
 def verify(payload):
     raw = base64.b64decode(payload["source"], validate=True)
     signals = payload["signals"]
@@ -71,6 +137,7 @@ def verify(payload):
         if len(nodes) > 20000:
             return {"error": "source_verifier_too_complex"}
     symbols = symtable.symtable(source, "<verification-source>", "exec")
+    parents = {child: node for node in nodes for child in ast.iter_child_nodes(node)}
     calls = {(node.lineno, node.col_offset + 1, node.end_lineno, node.end_col_offset + 1): node
              for node in nodes if isinstance(node, ast.Call)}
     decisions = []
@@ -82,7 +149,8 @@ def verify(payload):
             func = node.func
             root = (func.id if isinstance(func, ast.Name) else func.value.id
                     if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name) else None)
-            target = imported_target(root, (node.lineno, node.col_offset), tree, nodes, symbols) if root else None
+            target = (function_import_target(root, node, parents, nodes, symbols) or
+                      imported_target(root, (node.lineno, node.col_offset), tree, nodes, symbols)) if root else None
             if target is None:
                 result, reason = "inconclusive", "binding_not_established"
             else:

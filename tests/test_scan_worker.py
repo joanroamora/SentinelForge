@@ -62,7 +62,6 @@ def test_known_top_level_import_aliases_are_recognized(source):
     "subprocess.run('demo', shell=True)\n",
     "from other_module import run\nrun('demo', shell=True)\n",
     "from .subprocess import run\nrun('demo', shell=True)\n",
-    "def launch():\n    import subprocess\n    subprocess.run('demo', shell=True)\n",
     "subprocess.run('demo', shell=True)\nimport subprocess\n",
     "subprocess.run('demo', shell=True); import subprocess\n",
     "run('demo', shell=True); from subprocess import run\n",

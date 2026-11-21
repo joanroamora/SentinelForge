@@ -1,5 +1,7 @@
 # Evaluación local de detección y trazado
 
+Las cifras y omisiones iniciales descritas aquí corresponden al motor 1.0. La [ampliación 1.1](16_IMPORTS_LOCALES.md) conserva el corpus y sus categorías, y registra una comparación posterior sin reemplazar esta línea base.
+
 ## Problema y vocabulario
 
 Una suite de pruebas demuestra comportamientos concretos, pero su número no describe cuánto detecta un analizador. Esta capa añade un **corpus**: un conjunto pequeño de ejemplos con referencias esperadas, y un evaluador que compara las salidas del motor sin modificar esas referencias.
@@ -74,7 +76,7 @@ Límites: corpus empaquetado de hasta 512 KiB, 64 casos, 65 537 bytes por fuente
 
 ## Primera línea base y nota académica
 
-Con la implementación actual: 15 TP, 8 TN, 0 FP y 3 FN por caso entre 26 entradas elegibles. La precisión observada es 100 % y el recall por caso 83,3 %. Por ubicación, se reproducen 16 de 19 señales de referencia: recall 84,2 %. Los dos errores de entrada se reconocen correctamente.
+En la primera línea base, con el motor 1.0: 15 TP, 8 TN, 0 FP y 3 FN por caso entre 26 entradas elegibles. La precisión observada es 100 % y el recall por caso 83,3 %. Por ubicación, se reproducen 16 de 19 señales de referencia: recall 84,2 %. Los dos errores de entrada se reconocen correctamente. La [mejora de imports locales en 1.1](16_IMPORTS_LOCALES.md) conserva este corpus y registra la comparación posterior, sin reescribir esta línea base.
 
 Se trazan 16 de 19 objetivos; los 16 coinciden con sus referencias, incluidos 4 resultados inconclusos. La exactitud de origen condicionada al trazado es 100 %, pero la cobertura y el acuerdo total son 84,2 %. Son resultados de este corpus pequeño, no estimaciones de calidad sobre repositorios reales. Deben compararse con el mismo hash de corpus y condiciones registradas.
 

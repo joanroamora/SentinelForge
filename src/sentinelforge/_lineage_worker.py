@@ -82,6 +82,12 @@ def investigate(call, signal, parents, capacity):
                 if not isinstance(statement.value, (ast.Name, ast.Constant)):
                     blocked = True
                     break
+            elif isinstance(statement, (ast.Import, ast.ImportFrom)):
+                names = {alias.asname or (alias.name.split(".")[0] if isinstance(statement, ast.Import)
+                                         else alias.name) for alias in statement.names}
+                if expression.id in names or "*" in names:
+                    blocked = True
+                    break
             elif not (isinstance(statement, (ast.Pass, ast.Global, ast.Nonlocal)) or
                       isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Constant)):
                 blocked = True

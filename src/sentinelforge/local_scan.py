@@ -18,7 +18,7 @@ from .local_source import (
     normalize_source_label,
 )
 
-DETECTOR_VERSION = "1.0"
+DETECTOR_VERSION = "1.1"
 WORKER_TIMEOUT_SECONDS = 5
 MAX_WORKER_OUTPUT_BYTES = 65536
 LIMITATIONS = (
@@ -67,7 +67,7 @@ class LocalScanReport(Contract):
     report_type: Literal["local_python_scan"] = "local_python_scan"
     is_demo: Literal[False] = False
     detector: Literal["sentinelforge-python-ast"] = "sentinelforge-python-ast"
-    detector_version: Literal["1.0"] = "1.0"
+    detector_version: Literal["1.0", "1.1"] = DETECTOR_VERSION
     python_version: str = Field(default_factory=platform.python_version)
     rules: list[Literal["SF-PY-001"]] = Field(default_factory=lambda: ["SF-PY-001"])
     status: Literal["COMPLETED", "ERROR"]

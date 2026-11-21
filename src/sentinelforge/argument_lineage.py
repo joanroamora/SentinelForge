@@ -116,9 +116,9 @@ class ArgumentTrace(Contract):
 class ArgumentInvestigation(Contract):
     schema_version: Literal["1.0"] = "1.0"
     investigator: Literal["sentinelforge-backward-slice"] = "sentinelforge-backward-slice"
-    investigator_version: Literal["1.0"] = "1.0"
+    investigator_version: Literal["1.0", "1.1"] = "1.1"
     verifier: Literal["sentinelforge-forward-bindings"] = "sentinelforge-forward-bindings"
-    verifier_version: Literal["1.0"] = "1.0"
+    verifier_version: Literal["1.0", "1.1"] = "1.1"
     python_version: str = Field(default_factory=platform.python_version)
     checked_at: AwareDatetime = Field(default_factory=lambda: datetime.now(UTC))
     scope: Literal["single_function_assignments"] = "single_function_assignments"

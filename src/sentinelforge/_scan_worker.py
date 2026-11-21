@@ -1,9 +1,10 @@
 """Bounded, standalone AST worker; input is data and is never imported or executed.
 
 Run with ``python -I -S path/to/_scan_worker.py``. Only stdlib imports belong here.
-Import aliases are recognized only at module level, before the call in source
-order. Any visible rebinding of an alias anywhere in the file suppresses it,
-conservatively accepting false negatives.
+Module aliases retain conservative file-wide shadow checks. Function-local
+imports must be direct body statements before the call in the same function;
+rebindings in that function suppress them. Closures and conditional imports
+remain outside this bounded resolver.
 This is a process boundary for parser failures, not an operating-system sandbox.
 """
 
@@ -45,7 +46,8 @@ def _attribute_root(node: ast.AST) -> str | None:
     return node.id if isinstance(node, ast.Name) else None
 
 
-def _aliases(tree: ast.Module, nodes: list[ast.AST]) -> dict[str, tuple[str, int, int]]:
+def _aliases(tree: ast.Module | ast.FunctionDef | ast.AsyncFunctionDef,
+             nodes: list[ast.AST]) -> dict[str, tuple[str, int, int]]:
     imports = [node for node in tree.body if isinstance(node, (ast.Import, ast.ImportFrom))]
     allowed_ids = {id(node) for node in imports}
     aliases: dict[str, tuple[str, int, int]] = {}
@@ -77,13 +79,27 @@ def _aliases(tree: ast.Module, nodes: list[ast.AST]) -> dict[str, tuple[str, int
         elif isinstance(node, (
             ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef,
             ast.ExceptHandler, ast.MatchAs, ast.MatchStar,
-        )) and node.name is not None:
+        )) and node.name is not None and node is not tree:
             blocked.add(node.name)
         elif isinstance(node, ast.MatchMapping) and node.rest is not None:
             blocked.add(node.rest)
         elif isinstance(node, TYPE_PARAMETERS):
             blocked.add(node.name)
+        elif not isinstance(tree, ast.Module) and isinstance(node, (ast.Global, ast.Nonlocal)):
+            blocked.update(node.names)
     return {name: target for name, target in aliases.items() if name not in blocked}
+
+
+def _function_body_scope(node: ast.AST, parents: dict[ast.AST, ast.AST]) -> ast.FunctionDef | ast.AsyncFunctionDef | None:
+    while node in parents:
+        parent = parents[node]
+        if isinstance(parent, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            return parent if node in parent.body else None
+        if isinstance(parent, (ast.ClassDef, ast.Lambda, ast.ListComp, ast.SetComp,
+                               ast.DictComp, ast.GeneratorExp)):
+            return None
+        node = parent
+    return None
 
 
 def scan_source(raw: bytes) -> dict:
@@ -102,6 +118,10 @@ def scan_source(raw: bytes) -> dict:
             if len(nodes) > MAX_AST_NODES:
                 return {"signals": [], "error": "source_too_complex"}
         aliases = _aliases(tree, nodes)
+        parents = {child: node for node in nodes for child in ast.iter_child_nodes(node)}
+        local_aliases = {}
+        mutated = {_attribute_root(node) for node in nodes if isinstance(node, (ast.Attribute, ast.Subscript))
+                   and isinstance(node.ctx, (ast.Store, ast.Del))}
         signals = []
         for node in nodes:
             if not isinstance(node, ast.Call) or not any(
@@ -110,8 +130,13 @@ def scan_source(raw: bytes) -> dict:
             ):
                 continue
             target = None
+            scope = _function_body_scope(node, parents)
+            if scope is not None and scope not in local_aliases:
+                local_aliases[scope] = {name: value for name, value in
+                    _aliases(scope, list(ast.walk(scope))).items() if name not in mutated}
+            candidates = aliases | local_aliases.get(scope, {})
             if isinstance(node.func, ast.Name):
-                candidate = aliases.get(node.func.id)
+                candidate = candidates.get(node.func.id)
                 if candidate is not None and candidate[0] in SUBPROCESS_FUNCTIONS and (
                     candidate[1:] <= (node.lineno, node.col_offset)
                 ):
@@ -120,7 +145,7 @@ def scan_source(raw: bytes) -> dict:
                 isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Name)
                 and node.func.attr in SUBPROCESS_FUNCTIONS
             ):
-                candidate = aliases.get(node.func.value.id)
+                candidate = candidates.get(node.func.value.id)
                 if candidate is not None and candidate[0] == "module" and (
                     candidate[1:] <= (node.lineno, node.col_offset)
                 ):

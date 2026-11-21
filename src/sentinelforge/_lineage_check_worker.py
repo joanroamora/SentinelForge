@@ -67,6 +67,7 @@ def replay(call, signal, ancestors, allowance):
             bindings[parameter.arg] = ("parameter", "straight_line_bindings",
                                        [item("parameter", parameter, parameter.arg)])
     barrier = False
+    import_bindings = set()
 
     def expression(node):
         if isinstance(node, ast.Constant):
@@ -77,7 +78,7 @@ def replay(call, signal, ancestors, allowance):
             if node.id not in external and node.id in bindings:
                 kind, reason, steps = bindings[node.id]
                 return kind, reason, list(steps)
-            reason = ("control_flow_or_opaque_statement" if barrier and node.id not in external
+            reason = ("control_flow_or_opaque_statement" if (barrier or node.id in import_bindings) and node.id not in external
                       else "binding_out_of_scope")
             return "unknown", reason, [item("unknown", node, node.id)]
         return "unknown", "expression_out_of_scope", [item("unknown", node)]
@@ -94,6 +95,16 @@ def replay(call, signal, ancestors, allowance):
             path.append(item("assignment", target, target.id))
             bindings[target.id] = kind, reason, path
             assignment_sources[tuple(span(target).values())] = statement.value
+            import_bindings.discard(target.id)
+        elif isinstance(statement, (ast.Import, ast.ImportFrom)):
+            for alias in statement.names:
+                if alias.name == "*":
+                    bindings.clear()
+                    barrier = True
+                else:
+                    name = alias.asname or alias.name.split(".")[0] if isinstance(statement, ast.Import) else alias.asname or alias.name
+                    bindings.pop(name, None)
+                    import_bindings.add(name)
         elif not (isinstance(statement, (ast.Pass, ast.Global, ast.Nonlocal)) or
                   isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Constant)):
             bindings.clear()
