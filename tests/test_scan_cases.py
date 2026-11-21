@@ -99,6 +99,7 @@ def test_migration_four_preserves_demo_monitor_and_all_previous_rows(tmp_path):
         tables = [row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")
                   if not row[0].startswith(("local_scan_", "sqlite_"))]
         before = {table: connection.execute(f"SELECT * FROM {table}").fetchall() for table in tables}
+        connection.execute("DROP TABLE local_scan_verifications")
         connection.execute("DROP TABLE local_scan_submissions")
         connection.execute("DROP TABLE local_scan_revisions")
         connection.execute("PRAGMA user_version = 4")
@@ -107,7 +108,7 @@ def test_migration_four_preserves_demo_monitor_and_all_previous_rows(tmp_path):
     assert restarted.get_monitor_questions(workflow.analysis_id) == questions
     assert restarted.list_local_scans() == []
     with sqlite3.connect(database) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 5
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 6
         assert {table: connection.execute(f"SELECT * FROM {table}").fetchall() for table in tables} == before
 
 

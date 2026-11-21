@@ -7,9 +7,11 @@ from uuid import UUID
 import typer
 from pydantic import ValidationError
 
+from .local_source import LocalSourceError
 from .monitor import MonitorAnswerRequest, MonitorConflictError
 from .service import AnalysisService
 from .simulation import DemoFixtureId
+from .source_review import SourceReviewError
 from .terminal import OUTPUT_FORMAT, OutputFormat, console, emit, human_output
 from .terminal_logo import ANIMATION_ENABLED, show_logo
 from .workflow import WorkflowConflictError
@@ -90,6 +92,19 @@ def scan_report(analysis_id: str, revision: Annotated[int | None, typer.Option(m
         typer.echo("local_scan_not_found", err=True)
         raise typer.Exit(code=2)
     emit(case, output)
+
+
+@app.command()
+def scan_verify(analysis_id: str, file: str, submission_id: Annotated[UUID, typer.Option()],
+                output: Annotated[OutputFormat, typer.Option("--format")] = OutputFormat.auto) -> None:
+    """Corrobora señales con bytes cuyo hash coincide con el original; no ejecuta el archivo."""
+    service = AnalysisService()
+    try:
+        service.review_local_source(analysis_id, file, submission_id)
+    except (LookupError, SourceReviewError, LocalSourceError) as error:
+        typer.echo(str(error), err=True)
+        raise typer.Exit(code=2) from error
+    emit(service.get_local_scan(analysis_id), output)
 
 
 @app.command()

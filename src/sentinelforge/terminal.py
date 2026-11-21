@@ -105,6 +105,18 @@ def emit(value, output: OutputFormat = OutputFormat.auto) -> None:
                           Text("sin verificar", style="yellow"))
         if report["signals"]:
             term.print(table)
+        if data.get("source_review"):
+            review = data["source_review"]
+            labels = {"pattern_reproduced": "Patrón reproducido", "not_reproduced": "No reproducido",
+                      "inconclusive": "Inconcluso"}
+            checked = Table(box=box.SIMPLE_HEAVY, header_style="bold cyan", expand=True)
+            for column in ("Señal", "Corroboración", "Motivo"):
+                checked.add_column(column, overflow="fold")
+            for decision in review["decisions"]:
+                checked.add_row(decision["signal_fingerprint"][:12], labels[decision["result"]],
+                                decision["reason"])
+            term.print(Panel(checked, title="Fuente original · hash coincidente", border_style="cyan"))
+            term.print(Text(" Solo patrón estático. Riesgo y declaraciones humanas sin verificar.", style="dim"))
         for error in report["errors"]:
             term.print(Panel(Text(error["code"] + "\n" + error["message"]), border_style="red"))
         if data.get("question"):

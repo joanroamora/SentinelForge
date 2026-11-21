@@ -1,7 +1,7 @@
 # SentinelForge AI
 
 **Multi-Agent Security Analysis Platform**  
-**Estado:** workspace local con detector Python acotado por CLI/API/web, expedientes SQLite versionados y contexto humano sin verificar. Incluye una demo simulada identificada y una CLI visual con salida JSON para automatización.
+**Estado:** workspace local con detector Python acotado, corroboración estática sobre la fuente original, expedientes SQLite versionados y contexto humano sin verificar. Disponible por CLI/API/web, con una demo simulada identificada.
 
 ## Misión
 
@@ -42,6 +42,8 @@ Un flujo vertical demostrable: un proyecto Python de prueba es recibido por CLI 
 - [Monitor mínimo persistente](docs/10_MONITOR_PERSISTENTE.md)
 - [Primer detector Python local](docs/11_DETECTOR_PYTHON_LOCAL.md)
 - [Expedientes reales, workspace y CLI visual](docs/12_EXPEDIENTES_Y_WORKSPACE.md)
+- [Corroboración de señales con la fuente original](docs/13_CORROBORACION_DE_FUENTES.md)
+- [ADR 0008: corroboración estática](docs/adr/0008-corroboracion-estatica-de-fuentes.md)
 - [ADR 0007: expedientes y presentación](docs/adr/0007-expedientes-reales-y-presentacion.md)
 - [ADR 0006: detector local y contrato separado](docs/adr/0006-detector-python-local.md)
 - [ADR 0005: Monitor y respuestas inmutables](docs/adr/0005-monitor-minimo-persistente.md)
@@ -77,6 +79,8 @@ Para ver el emblema **SF 3D** girando sobre su eje vertical:
 ```
 
 La animación aparece brevemente en los resultados visuales. `--no-animation` antes del comando la desactiva; pipes y JSON mantienen su salida sin animación.
+
+Para corroborar un expediente, usar el archivo original con `scan-verify ID ARCHIVO --submission-id UUID --format pretty` o la sección **Corroboración de la fuente** en la web. Se compara el hash y se revisa el patrón con una implementación separada. El resultado crea una nueva revisión; no confirma explotabilidad ni verifica las declaraciones humanas. Consulta [alcance y ejemplos](docs/13_CORROBORACION_DE_FUENTES.md).
 
 ## Ejecutar la demo local
 

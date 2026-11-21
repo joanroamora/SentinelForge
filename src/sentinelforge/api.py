@@ -1,7 +1,9 @@
 """FastAPI adapter over the shared AnalysisService."""
 
 import asyncio
+from contextlib import asynccontextmanager
 from pathlib import Path
+from uuid import UUID
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi import Path as PathParameter
@@ -21,6 +23,7 @@ from .repository import ReportConflictError
 from .scan_case import ScanAnswerReceipt, ScanCase
 from .service import AnalysisService
 from .simulation import SimulationStartRequest, SimulationTrace
+from .source_review import SourceReviewError, SourceReviewReceipt
 from .web import WEB_PAGE
 from .workflow import WorkflowAdvanceRequest, WorkflowCheckpoint, WorkflowConflictError
 
@@ -35,17 +38,13 @@ def create_app(
     app.mount("/assets", StaticFiles(directory=Path(__file__).with_name("static")), name="assets")
     scanner_slots = asyncio.Semaphore(2)
 
-    @app.post("/v1/local-scans", response_model=ScanCase)
-    async def scan_upload(request: Request, filename: str = Query(max_length=1024)) -> ScanCase:
+    @asynccontextmanager
+    async def artifact_input(request: Request):
         if request.headers.get("content-type", "").split(";")[0] != "application/octet-stream":
             raise HTTPException(status_code=415, detail="expected_octet_stream")
         origin = request.headers.get("origin")
         if origin and origin != str(request.base_url).rstrip("/"):
             raise HTTPException(status_code=403, detail="origin_not_allowed")
-        try:
-            label = normalize_source_label(filename)
-        except LocalSourceError as error:
-            raise HTTPException(status_code=422, detail=error.code) from error
         if scanner_slots.locked():
             raise HTTPException(status_code=503, detail="scanner_busy")
         async with scanner_slots:
@@ -54,9 +53,29 @@ def create_app(
                 if len(content) + len(chunk) > MAX_SOURCE_BYTES:
                     raise HTTPException(status_code=413, detail="source_too_large")
                 content.extend(chunk)
+            yield bytes(content)
+
+    @app.post("/v1/local-scans", response_model=ScanCase)
+    async def scan_upload(request: Request, filename: str = Query(max_length=1024)) -> ScanCase:
+        try:
+            label = normalize_source_label(filename)
+        except LocalSourceError as error:
+            raise HTTPException(status_code=422, detail=error.code) from error
+        async with artifact_input(request) as content:
             return await run_in_threadpool(
                 app.state.analysis_service.create_source_scan, label, bytes(content)
             )
+
+    @app.post("/v1/local-scans/{analysis_id}/verify", response_model=SourceReviewReceipt)
+    async def scan_verify(analysis_id: str, request: Request, submission_id: UUID) -> SourceReviewReceipt:
+        async with artifact_input(request) as content:
+            try:
+                return await run_in_threadpool(app.state.analysis_service.review_source_bytes,
+                                              analysis_id, content, submission_id)
+            except LookupError as error:
+                raise HTTPException(status_code=404, detail="local_scan_not_found") from error
+            except SourceReviewError as error:
+                raise HTTPException(status_code=error.http_status, detail=str(error)) from error
 
     @app.get("/v1/local-scans", response_model=list[ScanCase])
     def scan_history(limit: int = Query(default=25, ge=1, le=100),

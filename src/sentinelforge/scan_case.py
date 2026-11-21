@@ -4,11 +4,12 @@ from datetime import UTC, datetime
 from typing import Literal, Self
 from uuid import UUID
 
-from pydantic import AwareDatetime, Field, model_validator
+from pydantic import AwareDatetime, Field, model_serializer, model_validator
 
 from .contracts import Contract, HumanStatement
 from .local_scan import LocalScanReport
 from .monitor import MonitorAnswerRequest, MonitorConflictError
+from .source_review import SourceReview
 
 
 class ScanContextQuestion(Contract):
@@ -22,7 +23,7 @@ class ScanContextQuestion(Contract):
 
 
 class ScanCase(Contract):
-    schema_version: Literal["1.0"] = "1.0"
+    schema_version: Literal["1.0", "1.1"] = "1.0"
     report_type: Literal["local_scan_case"] = "local_scan_case"
     is_demo: Literal[False] = False
     id: str = Field(pattern=r"^scan-[0-9a-f]{64}$")
@@ -32,9 +33,19 @@ class ScanCase(Contract):
     report: LocalScanReport
     question: ScanContextQuestion | None = None
     human_statements: list[HumanStatement] = Field(default_factory=list, max_length=1)
+    source_review: SourceReview | None = None
+
+    @model_serializer(mode="wrap")
+    def versioned_payload(self, handler):
+        data = handler(self)
+        if self.schema_version == "1.0":
+            data.pop("source_review", None)
+        return data
 
     @model_validator(mode="after")
     def case_matches_observation(self) -> Self:
+        if (self.source_review is None) != (self.schema_version == "1.0"):
+            raise ValueError("scan_case_review_version_mismatch")
         if self.report.scan_fingerprint is None or self.id != "scan-" + self.report.scan_fingerprint:
             raise ValueError("scan_case_identity_mismatch")
         expected = ("ERROR" if self.report.status == "ERROR" else
@@ -50,6 +61,11 @@ class ScanCase(Contract):
                 raise ValueError("scan_case_statement_mismatch")
         elif self.human_statements:
             raise ValueError("scan_case_has_no_question")
+        if self.source_review is not None and (
+                self.report.source is None or self.source_review.source_sha256 != self.report.source.sha256
+                or [item.signal_fingerprint for item in self.source_review.decisions] !=
+                [item.fingerprint for item in self.report.signals]):
+            raise ValueError("scan_case_review_reference_mismatch")
         return self
 
 

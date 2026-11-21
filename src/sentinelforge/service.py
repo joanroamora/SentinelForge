@@ -1,6 +1,7 @@
 """Application service shared by the CLI and HTTP adapter."""
 
 from pathlib import Path
+from uuid import UUID
 
 from .contracts import Analysis, AnalysisReport, Evidence, Finding, HumanStatement, ReportRevision
 from .demo_fixture import (
@@ -16,10 +17,17 @@ from .demo_fixture import (
     STATEMENT_TEXT,
 )
 from .local_scan import LocalScanReport, scan_local_file, scan_source_bytes
+from .local_source import load_local_source
 from .monitor import MonitorAnswerReceipt, MonitorAnswerRequest, MonitorQuestion
 from .repository import ReportConflictError, SQLiteReportRepository
 from .scan_case import ScanAnswerReceipt, ScanCase
 from .simulation import DemoFixtureId, SimulationStartRequest, SimulationTrace
+from .source_review import (
+    SourceReviewError,
+    SourceReviewReceipt,
+    ensure_original_bytes,
+    review_original_source,
+)
 from .workflow import WorkflowCheckpoint
 
 
@@ -47,6 +55,27 @@ class AnalysisService:
 
     def answer_local_scan(self, analysis_id: str, request: MonitorAnswerRequest) -> ScanAnswerReceipt:
         return self._repository.answer_local_scan(analysis_id, request)
+
+    def review_source_bytes(self, analysis_id: str, content: bytes,
+                            submission_id: UUID) -> SourceReviewReceipt:
+        case = self.get_local_scan(analysis_id)
+        if case is None:
+            raise LookupError("local_scan_not_found")
+        ensure_original_bytes(case.report, content)
+        previous = self._repository.get_source_review_receipt(submission_id)
+        if previous is not None:
+            if previous.analysis_id != analysis_id:
+                raise SourceReviewError("source_review_submission_conflict")
+            return previous
+        if case.source_review is not None:
+            raise SourceReviewError("source_review_already_recorded")
+        review = review_original_source(case.report, content)
+        return self._repository.save_source_review(analysis_id, submission_id, review)
+
+    def review_local_source(self, analysis_id: str, relative_path: str,
+                            submission_id: UUID, *, root: Path | None = None) -> SourceReviewReceipt:
+        _, content = load_local_source(Path.cwd() if root is None else root, relative_path)
+        return self.review_source_bytes(analysis_id, content, submission_id)
 
     def create_demo_analysis(self) -> AnalysisReport:
         report = self._build_demo_report(Analysis())

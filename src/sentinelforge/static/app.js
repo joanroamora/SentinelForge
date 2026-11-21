@@ -4,6 +4,7 @@
   const names = {overview:'Vista general',new:'Nuevo análisis',history:'Expedientes',case:'Expediente',lab:'Laboratorio demo'};
   const states = {COMPLETED:['Inspección terminada','teal'],PARTIAL:['Revisión pendiente','amber'],ERROR:['Error técnico','red']};
   let rows = [], offset = 0, selected = null, current = null, latestRevision = 0, busy = false, draft = null, activeView='overview';
+  let reviewFile=null, reviewDraft=null;
   const make = (tag, text, cls) => { const node=document.createElement(tag); if(text!==undefined) node.textContent=text; if(cls)node.className=cls; return node; };
   const short = id => id.replace('scan-','').slice(0,12);
   const date = value => new Intl.DateTimeFormat('es',{dateStyle:'medium',timeStyle:'short'}).format(new Date(value));
@@ -14,6 +15,7 @@
     if(!response.ok) {
       let code=''; try { code=(await response.json()).detail; } catch { /* Generic error below. */ }
       const messages={source_too_large:'El archivo supera los 64 KiB permitidos.',source_path_invalid:'Selecciona un nombre de archivo Python válido.',unsupported_file_type:'Solo se admiten archivos .py.',scanner_busy:'El motor está ocupado. Reintenta en unos segundos.',monitor_submission_conflict:'La clave de envío corresponde a otro contenido. Tu borrador se conserva.',monitor_question_already_answered:'La pregunta ya fue respondida. Actualiza el expediente; tu borrador se conserva.'};
+      Object.assign(messages,{source_hash_mismatch:'La huella del archivo no coincide con la fuente original. No se modificó el expediente.',source_review_already_recorded:'Ya se guardó una corroboración. Actualiza a la última revisión.',source_review_submission_conflict:'Esta clave de envío corresponde a otro expediente.',source_verifier_timeout:'La comprobación superó su tiempo límite. Puedes reintentar.',source_verifier_failed:'El verificador no pudo terminar. No se creó una revisión.',source_verifier_invalid_python:'El verificador no pudo interpretar esta fuente. El expediente conserva su estado.'});
       const error=new Error(messages[code] || (response.status===404?'No se encontró el expediente o la revisión.':response.status===422?'Revisa los datos enviados.':'No se pudo completar la operación. Puedes reintentar.'));
       error.code=code; throw error;
     }
@@ -28,6 +30,9 @@
     el('case-next').disabled=busy||!current||current.revision>=latestRevision;
     const canAnswer=current&&current.revision===latestRevision&&current.question?.status==='pending';
     for(const id of ['case-actor','case-role','case-text','case-answer-submit']) el(id).disabled=busy||!canAnswer;
+    const canReview=current&&current.revision===latestRevision&&current.report.status==='COMPLETED'&&current.report.signals.length&&!current.source_review;
+    el('case-review-file').disabled=busy||!canReview;
+    el('case-review-submit').disabled=busy||!canReview||!reviewFile;
   }
   async function action(work) { if(busy)return; busy=true;controls();notice('Procesando en el entorno local…'); try {await work();notice('Operación completada.');}catch(error){notice(error instanceof TypeError?'No se pudo conectar con el servidor. Tu borrador se conserva.':error.message,true);}finally{busy=false;controls();} }
   function view(name) {
@@ -72,9 +77,26 @@
   }
   async function loadHistory(pageOffset=offset){const loaded=await request('/v1/local-scans?limit=25&offset='+pageOffset);rows=loaded;offset=pageOffset;renderHistory();}
   function refreshCounts(){request('/v1/local-scans?limit=25').then(renderDashboard).catch(()=>{el('nav-count').textContent='—';});}
+  function renderSourceReview(item) {
+    const review=item.source_review,historical=item.revision!==latestRevision;
+    el('case-review').hidden=!item.report.signals.length;
+    el('case-review-form').hidden=!!review||historical;
+    el('case-review-state').textContent=review?'Hash coincidente':'Pendiente';
+    el('case-review-state').className='badge '+(review?'teal':'amber');
+    el('case-review-explanation').textContent=review?'La comprobación usó bytes con el hash original. No se conservó el código aportado.':'Aporta el archivo original para contrastar su hash, la llamada y el literal shell=True. El código no se ejecuta ni se conserva.';
+    el('case-review-hint').textContent=historical&&!review?'Esta revisión todavía no incluye corroboración. Abre la última para aportarla.':review?'SHA-256 coincidente · '+date(review.checked_at)+' · riesgo sin verificar':'';
+    const results=el('case-review-results');results.replaceChildren();
+    const labels={pattern_reproduced:'Patrón reproducido',not_reproduced:'No reproducido',inconclusive:'Inconcluso'};
+    const reasons={literal_shell_true_observed:'La llamada y el literal shell=True están presentes.',location_does_not_match:'La ubicación no corresponde a la llamada reportada.',call_does_not_match:'La llamada no coincide con la señal.',shell_true_not_observed:'No se observó el literal True esperado.',binding_not_established:'No se pudo establecer el vínculo del nombre importado en este alcance.'};
+    for(const [index,decision] of (review?.decisions||[]).entries()) {
+      const signal=item.report.signals[index],card=make('article',undefined,'signal'),head=make('div',undefined,'signal-head');
+      head.append(make('span','SF-PY-001','tag'),make('strong',labels[decision.result]),make('span',`Línea ${signal.line}:${signal.column}`,'muted'));
+      card.append(head,make('p',reasons[decision.reason]));results.append(card);
+    }
+  }
   function renderCase(item) {
     const changed=!current||current.id!==item.id;current=item;
-    if(changed){draft=null;for(const id of ['case-actor','case-role','case-text'])el(id).value='';}
+    if(changed){draft=null;reviewFile=null;reviewDraft=null;el('case-review-file').value='';el('case-review-file-info').textContent='Puede tener otro nombre; los bytes deben coincidir con el archivo analizado. Hasta 64 KiB.';for(const id of ['case-actor','case-role','case-text'])el(id).value='';}
     el('case-title').textContent=item.report.source.relative_path;el('case-id').textContent=item.id;
     const [label,cls]=states[item.status];el('case-status').textContent=label;el('case-status').className='badge '+cls;
     el('case-version').textContent=`Revisión ${item.revision} de ${latestRevision} · ${date(item.created_at)}`;
@@ -92,6 +114,7 @@
       for(const statement of item.human_statements)el('case-answer-display').append(make('blockquote',statement.text),make('p',`${statement.actor} · ${statement.role} · ${date(statement.created_at)} · unverified`));
       if(draft&&item.question.status==='answered'&&el('case-text').value&&item.human_statements[0]?.id!=='statement-'+draft.id){const saved=make('details');saved.append(make('summary','Borrador local conservado'),make('pre',el('case-text').value));el('case-answer-display').append(saved);}
     }
+    renderSourceReview(item);
     el('case-json').textContent=JSON.stringify(item,null,2);view('case');controls();
   }
   async function openCase(id,revision) {
@@ -128,6 +151,17 @@
     const body={actor:el('case-actor').value,role:el('case-role').value,text:el('case-text').value};if(Object.values(body).some(value=>!value.trim())){notice('Completa autor, rol y contexto con texto visible.',true);return;}
     const fingerprint=JSON.stringify({id:current.id,...body});if(!draft||draft.fingerprint!==fingerprint)draft={id:crypto.randomUUID(),fingerprint};
     const id=current.id;action(async()=>{await request('/v1/local-scans/'+encodeURIComponent(id)+'/answers',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...body,submission_id:draft.id})});await openCase(id);draft=null;for(const key of ['case-actor','case-role','case-text'])el(key).value='';refreshCounts();});
+  };
+  el('case-review-file').onchange=event=>{
+    const file=event.target.files[0];reviewDraft=null;
+    reviewFile=file&&file.name.toLowerCase().endsWith('.py')&&file.size<=65536?file:null;
+    el('case-review-file-info').textContent=reviewFile?`${file.name} · ${file.size} bytes · listo para contrastar`:'Selecciona un .py de hasta 64 KiB.';controls();
+  };
+  el('case-review-form').onsubmit=event=>{
+    event.preventDefault();if(!current||!reviewFile||current.source_review||current.revision!==latestRevision)return;
+    if(!reviewDraft)reviewDraft={id:crypto.randomUUID()};
+    const id=current.id,file=reviewFile,key=reviewDraft.id;
+    action(async()=>{await request('/v1/local-scans/'+encodeURIComponent(id)+'/verify?submission_id='+encodeURIComponent(key),{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:file});await openCase(id);reviewFile=null;reviewDraft=null;el('case-review-file').value='';});
   };
   el('download-case').onclick=()=>{if(!current)return;const url=URL.createObjectURL(new Blob([JSON.stringify(current,null,2)],{type:'application/json'})),link=make('a');link.href=url;link.download=`sentinelforge-${short(current.id)}-r${current.revision}.json`;link.click();URL.revokeObjectURL(url);};
   window.addEventListener('hashchange',route);

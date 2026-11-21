@@ -9,7 +9,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from .contracts import AnalysisReport, ReportRevision
 from .local_scan import LocalScanReport
@@ -24,9 +24,10 @@ from .monitor import (
 )
 from .scan_case import ScanAnswerReceipt, ScanCase, answer_scan_case, new_scan_case
 from .simulation import SimulationTrace, advance_simulation, enrich_demo_report
+from .source_review import SourceReview, SourceReviewError, SourceReviewReceipt
 from .workflow import WorkflowCheckpoint, WorkflowConflictError, next_checkpoint
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 DEFAULT_DATABASE_PATH = Path(".sentinelforge/analyses.sqlite3")
 
 
@@ -60,7 +61,7 @@ class SQLiteReportRepository:
         version = connection.execute("PRAGMA user_version").fetchone()[0]
         if version == SCHEMA_VERSION:
             return
-        if version not in (0, 1, 2, 3, 4):
+        if version not in (0, 1, 2, 3, 4, 5):
             raise RuntimeError(f"unsupported_database_schema_version:{version}")
 
         connection.execute("BEGIN IMMEDIATE")
@@ -236,6 +237,24 @@ class SQLiteReportRepository:
                             BEGIN SELECT RAISE(ABORT, '{table}_are_immutable'); END
                         """)
                 version = 5
+            if version == 5:
+                connection.execute("""
+                    CREATE TABLE local_scan_verifications (
+                        submission_id TEXT PRIMARY KEY,
+                        analysis_id TEXT NOT NULL,
+                        revision INTEGER NOT NULL,
+                        receipt_json TEXT NOT NULL,
+                        FOREIGN KEY (analysis_id, revision)
+                            REFERENCES local_scan_revisions (analysis_id, revision)
+                    )
+                """)
+                for operation in ("UPDATE", "DELETE"):
+                    connection.execute(f"""
+                        CREATE TRIGGER local_scan_verifications_no_{operation.lower()}
+                        BEFORE {operation} ON local_scan_verifications
+                        BEGIN SELECT RAISE(ABORT, 'local_scan_verifications_are_immutable'); END
+                    """)
+                version = 6
             if version != SCHEMA_VERSION:
                 raise RuntimeError(f"unsupported_database_schema_version:{version}")
             connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
@@ -331,6 +350,48 @@ class SQLiteReportRepository:
                 self._append_event(connection, analysis_id, "local_scan_context_received",
                                    {"submission_id": str(request.submission_id),
                                     "verification_status": "unverified"})
+                connection.commit()
+                return receipt
+            except Exception:
+                connection.rollback()
+                raise
+
+    def get_source_review_receipt(self, submission_id: UUID) -> SourceReviewReceipt | None:
+        with self._connection() as connection:
+            row = connection.execute("SELECT receipt_json FROM local_scan_verifications "
+                                     "WHERE submission_id = ?", (str(submission_id),)).fetchone()
+        return None if row is None else SourceReviewReceipt.model_validate_json(row[0])
+
+    def save_source_review(self, analysis_id: str, submission_id: UUID,
+                           review: SourceReview) -> SourceReviewReceipt:
+        with self._connection() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                previous = connection.execute("SELECT receipt_json FROM local_scan_verifications "
+                                              "WHERE submission_id = ?", (str(submission_id),)).fetchone()
+                if previous is not None:
+                    receipt = SourceReviewReceipt.model_validate_json(previous[0])
+                    if receipt.analysis_id != analysis_id or receipt.review.source_sha256 != review.source_sha256:
+                        raise SourceReviewError("source_review_submission_conflict")
+                    connection.commit()
+                    return receipt
+                case = self._read_scan(connection, analysis_id)
+                if case is None:
+                    raise LookupError("local_scan_not_found")
+                if case.source_review is not None:
+                    raise SourceReviewError("source_review_already_recorded")
+                payload = case.model_dump()
+                payload.update(schema_version="1.1", revision=case.revision + 1,
+                               source_review=review.model_dump())
+                revised = ScanCase.model_validate(payload)
+                self._insert_scan(connection, revised)
+                receipt = SourceReviewReceipt(analysis_id=analysis_id, submission_id=submission_id,
+                                              revision=revised.revision, review=review)
+                connection.execute("INSERT INTO local_scan_verifications VALUES (?, ?, ?, ?)",
+                                   (str(submission_id), analysis_id, revised.revision, receipt.model_dump_json()))
+                self._append_event(connection, analysis_id, "local_scan_source_review_recorded",
+                                   {"revision": revised.revision, "submission_id": str(submission_id),
+                                    "scope": "static_pattern_only"})
                 connection.commit()
                 return receipt
             except Exception:
