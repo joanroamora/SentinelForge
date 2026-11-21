@@ -78,3 +78,9 @@ Crear datasets con verdad conocida. Medir por severidad y familia de riesgo: TP,
 Ya existen detector Python acotado, corroboración de fuente original e investigación determinista del origen del comando dentro de una función, con comprobador separado. CLI/API/web comparten motor y expedientes versionados. Esta capa está documentada en [Origen del comando](14_ORIGEN_DEL_COMANDO.md); aún no cubre flujo entre funciones, sanitizadores o alcanzabilidad, ni mide precisión/recall con un dataset representativo.
 
 Antes de ampliar el alcance, decidir la siguiente iteración: corpus etiquetado de casos positivos, negativos e inconclusos y métricas reproducibles; después evaluar qué ampliación aporta evidencia útil. GCP y la ejecución aislada de artefactos continúan como etapas posteriores que requieren diseño y autorización.
+
+## Avance local: evaluación de desarrollo (21 nov 2026)
+
+La [evaluación local](15_EVALUACION_LOCAL.md) incorpora 28 casos sintéticos con referencias fijas, sin auditoría independiente. Mide presencia por caso, localización por señal, cobertura/acuerdo de trazado, inconclusos y tiempo. Separa 23 casos del alcance actual, 3 fronteras con omisiones conocidas y 2 errores de entrada; un fallo técnico no cuenta como negativo. La CLI produce tablas o JSON y no crea expedientes.
+
+La primera línea base reproduce 16 de 19 señales de referencia, con 3 omisiones visibles y 4 trazados inconclusos entre los 16 realizados. Revisar las etiquetas y ampliar el corpus con ejemplos independientes precede a cualquier afirmación de calidad general. El próximo cambio funcional puede seleccionarse entre las limitaciones observadas, sin ampliar todos los dominios simultáneamente.

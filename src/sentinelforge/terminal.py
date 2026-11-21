@@ -75,6 +75,49 @@ def emit(value, output: OutputFormat = OutputFormat.auto) -> None:
         term.print(Panel(table, title="Expedientes guardados · esta página", border_style="#24465c"))
         if not data:
             term.print(" No hay expedientes. Empieza con: sentinelforge scan archivo.py")
+    elif isinstance(data, dict) and data.get("report_type") == "static_evaluation":
+        percent = lambda value: "n/a" if value is None else f"{value:.1%}"
+        milliseconds = lambda value: "n/a" if value is None else f"{value:.1f} ms"
+        info = Table.grid(padding=(0, 3)); info.add_column(style="dim"); info.add_column(overflow="fold")
+        info.add_row("Corpus", f"{data['corpus_id']} · {data['corpus_version']} · {len(data['cases'])} casos")
+        info.add_row("Referencias", "Sintéticas · sin auditoría independiente")
+        info.add_row("Resultado", {"pass": "Referencias en alcance coincidentes",
+                                   "fail": "Discrepancias en referencias en alcance",
+                                   "error": "Evaluación incompleta por error técnico"}[data["acceptance"]])
+        info.add_row("Errores esperados", f"{data['expected_error_matches']} / {data['groups']['input_error']['cases']}")
+        info.add_row("Tiempo", f"{data['elapsed_ms'] / 1000:.2f} s · p50 {milliseconds(data['case_latency_p50_ms'])} · p95 {milliseconds(data['case_latency_p95_ms'])}")
+        info.add_row("Huella corpus", data["corpus_sha256"])
+        term.print(Panel(info, title="Evaluación local · patrones y recorridos", border_style="cyan"))
+        table = Table(box=box.SIMPLE_HEAVY, expand=True, header_style="bold cyan")
+        for column in ("Grupo", "Casos*", "TP / FP / TN / FN", "Precisión", "Recall"):
+            table.add_column(column)
+        labels = {"in_scope": "En alcance", "boundary": "Fronteras", "all": "Total"}
+        for group, label in labels.items():
+            metrics = data["groups"][group]; detection = metrics["detection"]
+            table.add_row(label, str(metrics["eligible_detection_cases"]),
+                          " / ".join(str(detection[key]) for key in ("true_positives", "false_positives", "true_negatives", "false_negatives")),
+                          percent(detection["precision"]), percent(detection["recall"]))
+        term.print(Panel(table, title="Detección por caso", border_style="#24465c"))
+        term.print(Text(" * Casos elegibles: errores de entrada y fallos del detector se cuentan aparte.", style="dim"))
+        trace_table = Table(box=box.SIMPLE_HEAVY, expand=True, header_style="bold cyan")
+        for column in ("Grupo", "Trazados", "Cobertura", "Origen*", "Acuerdo", "Inconc."):
+            trace_table.add_column(column)
+        for group, label in labels.items():
+            tracing = data["groups"][group]["tracing"]
+            trace_table.add_row(label, f"{tracing['traced']} / {tracing['expected']}", percent(tracing["coverage"]),
+                                percent(tracing["origin_accuracy_when_traced"]), percent(tracing["reference_agreement_end_to_end"]),
+                                str(tracing["inconclusive"]))
+        term.print(Panel(trace_table, title="Trazado contra referencias", border_style="#24465c"))
+        term.print(Text(" * Origen se mide solo entre trazados; acuerdo total incluye lo no trazado.", style="dim"))
+        differences = [case for case in data["cases"] if not case["reference_match"]]
+        if differences:
+            details = Table(box=box.SIMPLE, expand=True)
+            details.add_column("Caso"); details.add_column("Grupo"); details.add_column("Resultado")
+            for case in differences:
+                details.add_row(safe_text(case["id"]), case["scope"], safe_text(case["error_code"] or
+                                ("Señal no detectada" if case["targets"] and not case["observed_signals"] else "Referencia no reproducida")))
+            term.print(Panel(details, title="Discrepancias visibles", border_style="yellow"))
+        term.print(Text(" Corpus de desarrollo pequeño. No es una medida de seguridad ni de explotabilidad.", style="dim"))
     elif isinstance(data, dict) and data.get("report_type") in {"local_scan_case", "local_python_scan"}:
         report = data.get("report", data)
         source = report["source"]
