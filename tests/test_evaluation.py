@@ -15,6 +15,7 @@ from sentinelforge.evaluation import (
 from sentinelforge.evaluation_contracts import (
     CaseEvaluation,
     EvaluationCorpus,
+    EvaluationReport,
     SignalReference,
     TargetEvaluation,
 )
@@ -58,18 +59,20 @@ def test_builtin_reference_baseline_separates_scope_boundaries_and_errors(benchm
     assert report.acceptance == "pass" and report.status == "COMPLETED"
     assert len(report.cases) == 28
     assert report.expected_error_matches == 2 and not report.reference_failures
-    assert set(report.boundary_gaps) == {"assignment-alias-gap"}
+    assert report.boundary_gaps == []
     supported = report.groups["in_scope"]
     assert supported.cases == 23 and supported.detection.true_positives == 15
     assert supported.detection.true_negatives == 8 and supported.detection.false_positives == 0
     assert supported.localization.matched == 16 and supported.tracing.traced == 16
     assert supported.tracing.inconclusive == 4
     total = report.groups["all"]
-    assert total.eligible_detection_cases == 26 and total.detection.false_negatives == 1
-    assert total.detection.recall == pytest.approx(17 / 18)
-    assert total.localization.recall == pytest.approx(18 / 19)
+    assert total.eligible_detection_cases == 26 and total.detection.false_negatives == 0
+    assert total.detection.true_positives == 18 and total.detection.false_positives == 0
+    assert total.detection.recall == 1
+    assert total.localization.matched == total.tracing.traced == 19
+    assert total.localization.recall == 1 and total.tracing.inconclusive == 4
     assert total.tracing.origin_accuracy_when_traced == 1
-    assert total.tracing.coverage == total.tracing.reference_agreement_end_to_end == pytest.approx(18 / 19)
+    assert total.tracing.coverage == total.tracing.reference_agreement_end_to_end == 1
     assert report.groups["boundary"].detection.precision == 1
 
 
@@ -81,6 +84,9 @@ def test_report_contains_metadata_not_fixture_code_or_literal_values(benchmark):
     assert benchmark.python_version and benchmark.pydantic_version and benchmark.platform
     assert benchmark.reference_review == "not_independently_audited"
     assert benchmark.is_synthetic and benchmark.case_latency_p95_ms >= benchmark.case_latency_p50_ms
+    historical = benchmark.model_dump()
+    historical["evaluator_version"] = "1.0"
+    assert EvaluationReport.model_validate(historical).evaluator_version == "1.0"
 
 
 def test_false_positive_false_negative_and_zero_denominators_are_not_hidden(corpus):
@@ -200,23 +206,34 @@ def test_loader_and_contract_reject_missing_oversized_or_ambiguous_corpus(tmp_pa
 
 def test_cli_json_pretty_and_exit_policy(benchmark, monkeypatch):
     monkeypatch.setenv("NO_COLOR", "1")
-    monkeypatch.setattr(AnalysisService, "evaluate_builtin_corpus", lambda self: benchmark)
+    monkeypatch.setattr(AnalysisService, "evaluate_builtin_corpus", lambda self, corpus: benchmark)
     result = CliRunner().invoke(app, ["evaluate"])
     assert result.exit_code == 0 and json.loads(result.stdout)["report_type"] == "static_evaluation"
     pretty = CliRunner().invoke(app, ["--no-animation", "evaluate", "--format", "pretty"])
     assert pretty.exit_code == 0, pretty.output
     assert "Detección por caso" in pretty.stdout and "Fronteras" in pretty.stdout
-    assert "assignment-alias-gap" in pretty.stdout and "\x1b" not in pretty.stdout
+    assert "assignment-alias-gap" not in pretty.stdout and "\x1b" not in pretty.stdout
     failed = benchmark.model_copy(update={"acceptance": "fail"})
-    monkeypatch.setattr(AnalysisService, "evaluate_builtin_corpus", lambda self: failed)
+    monkeypatch.setattr(AnalysisService, "evaluate_builtin_corpus", lambda self, corpus: failed)
     assert CliRunner().invoke(app, ["evaluate"]).exit_code == 1
     incomplete = benchmark.model_copy(update={"acceptance": "error", "status": "PARTIAL"})
-    monkeypatch.setattr(AnalysisService, "evaluate_builtin_corpus", lambda self: incomplete)
+    monkeypatch.setattr(AnalysisService, "evaluate_builtin_corpus", lambda self, corpus: incomplete)
     assert CliRunner().invoke(app, ["evaluate"]).exit_code == 2
 
 
+def test_cli_still_displays_a_missing_boundary_reference(benchmark, monkeypatch):
+    with_gap = benchmark.model_copy(deep=True)
+    case = next(case for case in with_gap.cases if case.id == "assignment-alias-gap")
+    case.reference_match, case.observed_signals = False, []
+    with_gap.boundary_gaps = [case.id]
+    monkeypatch.setattr(AnalysisService, "evaluate_builtin_corpus", lambda self, corpus: with_gap)
+    pretty = CliRunner().invoke(app, ["--no-animation", "evaluate", "--format", "pretty"])
+    assert pretty.exit_code == 0
+    assert "assignment-alias-gap" in pretty.stdout and "Señal no detectada" in pretty.stdout
+
+
 def test_cli_loader_failure_emits_only_stable_diagnostic(monkeypatch):
-    def fail(self):
+    def fail(self, corpus):
         raise EvaluationError("evaluation_corpus_invalid_or_unavailable")
     monkeypatch.setattr(AnalysisService, "evaluate_builtin_corpus", fail)
     result = CliRunner().invoke(app, ["evaluate"])

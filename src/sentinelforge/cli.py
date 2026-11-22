@@ -9,6 +9,7 @@ from pydantic import ValidationError
 
 from .argument_lineage import LineageError
 from .evaluation import EvaluationError
+from .evaluation_contracts import BuiltinCorpus
 from .local_source import LocalSourceError
 from .monitor import MonitorAnswerRequest, MonitorConflictError
 from .service import AnalysisService
@@ -52,14 +53,15 @@ def logo(seconds: Annotated[float, typer.Option(min=0.1, max=30)] = 6,
 
 
 @app.command()
-def evaluate(output: Annotated[OutputFormat, typer.Option("--format")] = OutputFormat.auto) -> None:
+def evaluate(output: Annotated[OutputFormat, typer.Option("--format")] = OutputFormat.auto,
+             corpus: Annotated[BuiltinCorpus, typer.Option(help="Corpus empaquetado; no recibe rutas externas.")] = BuiltinCorpus.baseline) -> None:
     """Evalúa referencias sintéticas fijas de detección y trazado; no ejecuta las fixtures."""
     try:
         if human_output(output):
             with console().status("Evaluando detección, corroboración y trazado locales…", spinner="dots"):
-                result = AnalysisService().evaluate_builtin_corpus()
+                result = AnalysisService().evaluate_builtin_corpus(corpus)
         else:
-            result = AnalysisService().evaluate_builtin_corpus()
+            result = AnalysisService().evaluate_builtin_corpus(corpus)
     except EvaluationError as error:
         typer.echo(str(error), err=True)
         raise typer.Exit(code=2) from error

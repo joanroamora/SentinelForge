@@ -1,5 +1,9 @@
 # Ámbito de parámetros y guía de las capas implementadas
 
+Este documento conserva la entrega 1.2. La [ampliación 1.3](18_ALIAS_POR_ASIGNACION.md)
+añade alias de funciones por una asignación simple en el módulo y mantiene las
+mediciones históricas de esta página.
+
 ## El problema, explicado con un ejemplo
 
 ```python

@@ -37,6 +37,20 @@ def imported_target(root, call, tree, nodes, symbols, parents):
     symbol = symbols.lookup(root)
     if not symbol.is_imported() or symbol.is_assigned() or symbol.is_namespace():
         return None
+    if not module_binding_visible(root, call, nodes, symbols, parents):
+        return None
+    for node in nodes:
+        if isinstance(node, (ast.Attribute, ast.Subscript)) and isinstance(node.ctx, (ast.Store, ast.Del)):
+            value = node.value
+            while isinstance(value, (ast.Attribute, ast.Subscript)):
+                value = value.value
+            if isinstance(value, ast.Name) and value.id == root:
+                return None
+    return bindings[0][0]
+
+
+def module_binding_visible(root, call, nodes, symbols, parents):
+    """A compiler-local symbol must not replace the module name at this call."""
     named_functions = {(node.name, node.lineno) for node in nodes
                        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))}
     visible = set()
@@ -57,15 +71,50 @@ def imported_target(root, call, tree, nodes, symbols, parents):
                     not entry.is_namespace()):
                 continue
             if entry.is_local() or entry.is_parameter() or entry.is_imported() or entry.is_assigned():
-                return None
+                return False
+    return True
+
+
+def assigned_target(root, call, tree, nodes, symbols, parents):
+    """Reconstruct one module assignment using original imports and compiler symbols."""
+    declarations = [node for node in tree.body if isinstance(node, ast.Assign) and
+                    len(node.targets) == 1 and isinstance(node.targets[0], ast.Name)
+                    and node.targets[0].id == root]
+    if len(declarations) != 1 or root not in symbols.get_identifiers():
+        return None
+    declaration = declarations[0]
+    if (declaration.lineno, declaration.col_offset) >= (call.lineno, call.col_offset):
+        return None
+    symbol = symbols.lookup(root)
+    if not symbol.is_assigned() or symbol.is_imported() or symbol.is_namespace():
+        return None
+    if not module_binding_visible(root, call, nodes, symbols, parents):
+        return None
     for node in nodes:
+        if (isinstance(node, ast.Name) and node.id == root and
+                isinstance(node.ctx, (ast.Store, ast.Del)) and node is not declaration.targets[0]):
+            return None
+        if isinstance(node, (ast.Global, ast.Nonlocal)) and root in node.names:
+            return None
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef,
+                             ast.ExceptHandler, ast.MatchAs, ast.MatchStar)) and node.name == root:
+            return None
+        if isinstance(node, ast.MatchMapping) and node.rest == root:
+            return None
         if isinstance(node, (ast.Attribute, ast.Subscript)) and isinstance(node.ctx, (ast.Store, ast.Del)):
-            value = node.value
-            while isinstance(value, (ast.Attribute, ast.Subscript)):
-                value = value.value
-            if isinstance(value, ast.Name) and value.id == root:
+            base = node.value
+            while isinstance(base, (ast.Attribute, ast.Subscript)):
+                base = base.value
+            if isinstance(base, ast.Name) and base.id == root:
                 return None
-    return bindings[0][0]
+    value = declaration.value
+    if isinstance(value, ast.Name):
+        original = imported_target(value.id, declaration, tree, nodes, symbols, parents)
+        return original if original in {"subprocess." + name for name in FUNCTIONS} else None
+    if isinstance(value, ast.Attribute) and isinstance(value.value, ast.Name) and value.attr in FUNCTIONS:
+        original = imported_target(value.value.id, declaration, tree, nodes, symbols, parents)
+        return "subprocess." + value.attr if original == "subprocess" else None
+    return None
 
 
 def function_import_target(root, call, parents, nodes, symbols):
@@ -134,6 +183,75 @@ def function_import_target(root, call, parents, nodes, symbols):
     return bindings[0][0]
 
 
+def function_assigned_target(root, call, tree, nodes, symbols, parents):
+    """Establish a compiler-local single store and independently reread its import."""
+    child, owner = call, parents.get(call)
+    while owner is not None and not isinstance(owner, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        if isinstance(owner, (ast.ClassDef, ast.Lambda, ast.ListComp, ast.SetComp,
+                              ast.DictComp, ast.GeneratorExp)):
+            return None
+        child, owner = owner, parents.get(owner)
+    if owner is None or child not in owner.body:
+        return None
+    pending, tables = list(symbols.get_children()), []
+    while pending:
+        table = pending.pop()
+        pending.extend(table.get_children())
+        if table.get_type() == "function" and table.get_name() == owner.name and table.get_lineno() == owner.lineno:
+            tables.append(table)
+    if len(tables) != 1 or root not in tables[0].get_identifiers():
+        return None
+    symbol = tables[0].lookup(root)
+    if (not symbol.is_local() or not symbol.is_assigned() or symbol.is_parameter() or
+            symbol.is_imported() or symbol.is_global() or symbol.is_nonlocal() or symbol.is_namespace() or
+            any(getattr(item, "name", None) == root for item in getattr(owner, "type_params", []))):
+        return None
+    nested = list(tables[0].get_children())
+    while nested:
+        table = nested.pop()
+        nested.extend(table.get_children())
+        if root in table.get_identifiers():
+            entry = table.lookup(root)
+            if entry.is_local() or entry.is_parameter() or entry.is_imported() or entry.is_assigned():
+                return None
+    captures = [statement for statement in owner.body if isinstance(statement, ast.Assign)
+                and len(statement.targets) == 1 and isinstance(statement.targets[0], ast.Name)
+                and statement.targets[0].id == root]
+    if len(captures) != 1:
+        return None
+    capture = captures[0]
+    if (capture.lineno, capture.col_offset) >= (call.lineno, call.col_offset):
+        return None
+    for node in ast.walk(owner):
+        if (isinstance(node, ast.Name) and node.id == root and
+                isinstance(node.ctx, (ast.Store, ast.Del)) and node is not capture.targets[0]):
+            return None
+        if isinstance(node, (ast.Global, ast.Nonlocal)) and root in node.names:
+            return None
+        if (node is not owner and isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef,
+                ast.ClassDef, ast.ExceptHandler, ast.MatchAs, ast.MatchStar)) and node.name == root):
+            return None
+        if isinstance(node, ast.MatchMapping) and node.rest == root:
+            return None
+    for node in nodes:
+        if isinstance(node, (ast.Attribute, ast.Subscript)) and isinstance(node.ctx, (ast.Store, ast.Del)):
+            base = node.value
+            while isinstance(base, (ast.Attribute, ast.Subscript)):
+                base = base.value
+            if isinstance(base, ast.Name) and base.id == root:
+                return None
+    value = capture.value
+    original_name = value.id if isinstance(value, ast.Name) else (
+        value.value.id if isinstance(value, ast.Attribute) and isinstance(value.value, ast.Name) else None)
+    if original_name is None:
+        return None
+    original = (function_import_target(original_name, capture, parents, nodes, symbols) or
+                imported_target(original_name, capture, tree, nodes, symbols, parents))
+    if isinstance(value, ast.Name):
+        return original if original in {"subprocess." + name for name in FUNCTIONS} else None
+    return "subprocess." + value.attr if original == "subprocess" and value.attr in FUNCTIONS else None
+
+
 def verify(payload):
     raw = base64.b64decode(payload["source"], validate=True)
     signals = payload["signals"]
@@ -163,7 +281,9 @@ def verify(payload):
             root = (func.id if isinstance(func, ast.Name) else func.value.id
                     if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name) else None)
             target = (function_import_target(root, node, parents, nodes, symbols) or
-                      imported_target(root, node, tree, nodes, symbols, parents)) if root else None
+                      imported_target(root, node, tree, nodes, symbols, parents) or
+                      assigned_target(root, node, tree, nodes, symbols, parents) or
+                      function_assigned_target(root, node, tree, nodes, symbols, parents)) if root else None
             if target is None:
                 result, reason = "inconclusive", "binding_not_established"
             else:

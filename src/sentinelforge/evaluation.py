@@ -14,6 +14,7 @@ from pydantic import __version__ as pydantic_version
 
 from .argument_lineage import LineageError, investigate_argument
 from .evaluation_contracts import (
+    BuiltinCorpus,
     CaseEvaluation,
     DetectionMetrics,
     EvaluationCase,
@@ -30,6 +31,10 @@ from .source_review import SourceReviewError, review_original_source
 
 MAX_CORPUS_BYTES = 524288
 MAX_EVALUATION_SECONDS = 120
+BUILTIN_CORPORA = {
+    BuiltinCorpus.baseline: ("data/evaluation_v1.json", "sf-py-001-local"),
+    BuiltinCorpus.challenge: ("data/evaluation_challenge_v1.json", "sf-py-001-challenge"),
+}
 
 
 class EvaluationError(ValueError):
@@ -41,14 +46,21 @@ def _digest(value: object) -> str:
     return hashlib.sha256(canonical.encode("ascii")).hexdigest()
 
 
-def load_builtin_corpus() -> EvaluationCorpus:
+def load_builtin_corpus(selection: BuiltinCorpus = BuiltinCorpus.baseline) -> EvaluationCorpus:
     try:
-        asset = resources.files("sentinelforge").joinpath("data/evaluation_v1.json")
+        filename, identity = BUILTIN_CORPORA[BuiltinCorpus(selection)]
+    except (ValueError, TypeError, KeyError):
+        raise EvaluationError("evaluation_unknown_corpus") from None
+    try:
+        asset = resources.files("sentinelforge").joinpath(filename)
         with asset.open("rb") as handle:
             raw = handle.read(MAX_CORPUS_BYTES + 1)
         if len(raw) > MAX_CORPUS_BYTES:
             raise EvaluationError("evaluation_corpus_too_large")
-        return EvaluationCorpus.model_validate_json(raw)
+        corpus = EvaluationCorpus.model_validate_json(raw)
+        if corpus.id != identity or corpus.version != "1.0":
+            raise EvaluationError("evaluation_corpus_identity_mismatch")
+        return corpus
     except (OSError, ValueError, UnicodeError, RecursionError) as error:
         if isinstance(error, EvaluationError):
             raise

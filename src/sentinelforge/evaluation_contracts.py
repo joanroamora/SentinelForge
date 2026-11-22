@@ -1,6 +1,7 @@
 """Versioned evaluation references and results; references are not security verdicts."""
 
 from datetime import UTC, datetime
+from enum import Enum
 from typing import Literal, Self
 
 from pydantic import AwareDatetime, Field, model_validator
@@ -11,6 +12,11 @@ from .local_scan import LocalScanSignal
 
 CaseScope = Literal["in_scope", "boundary", "input_error"]
 OriginKind = Literal["literal", "parameter", "call_result", "unknown"]
+
+
+class BuiltinCorpus(str, Enum):
+    baseline = "baseline"
+    challenge = "challenge"
 
 
 class SignalReference(SourceSpan):
@@ -65,7 +71,7 @@ class EvaluationCase(Contract):
 
 class EvaluationCorpus(Contract):
     schema_version: Literal["1.0"] = "1.0"
-    id: Literal["sf-py-001-local"] = "sf-py-001-local"
+    id: Literal["sf-py-001-local", "sf-py-001-challenge"] = "sf-py-001-local"
     version: Literal["1.0"] = "1.0"
     reference_method: Literal["authored_static_expectations"] = "authored_static_expectations"
     reference_review: Literal["not_independently_audited"] = "not_independently_audited"
@@ -145,7 +151,7 @@ class GroupMetrics(Contract):
 class EvaluationReport(Contract):
     schema_version: Literal["1.0"] = "1.0"
     report_type: Literal["static_evaluation"] = "static_evaluation"
-    evaluator_version: Literal["1.0"] = "1.0"
+    evaluator_version: Literal["1.0", "1.1"] = "1.1"
     is_synthetic: Literal[True] = True
     source_retained: Literal[False] = False
     corpus_id: str
