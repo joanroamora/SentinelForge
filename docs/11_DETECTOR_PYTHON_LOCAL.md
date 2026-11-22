@@ -1,5 +1,7 @@
 # Primer detector Python local
 
+Este documento conserva el alcance de la primera entrega 1.0. La [ampliación 1.1](16_IMPORTS_LOCALES.md) reconoce también imports directos dentro de una función y mantiene la compatibilidad con los reportes anteriores.
+
 ## Problema y vocabulario
 
 Hasta esta capa las señales de SentinelForge eran ficticias. Ahora se puede inspeccionar un archivo Python real, elegido explícitamente desde la CLI, con una regla estática pequeña. **SAST** significa análisis estático de seguridad: leer la estructura del código sin ejecutarlo. Un **AST** es el árbol de sintaxis que permite distinguir una llamada de un comentario o una cadena.

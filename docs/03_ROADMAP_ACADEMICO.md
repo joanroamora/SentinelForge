@@ -78,3 +78,29 @@ Crear datasets con verdad conocida. Medir por severidad y familia de riesgo: TP,
 Ya existen detector Python acotado, corroboración de fuente original e investigación determinista del origen del comando dentro de una función, con comprobador separado. CLI/API/web comparten motor y expedientes versionados. Esta capa está documentada en [Origen del comando](14_ORIGEN_DEL_COMANDO.md); aún no cubre flujo entre funciones, sanitizadores o alcanzabilidad, ni mide precisión/recall con un dataset representativo.
 
 Antes de ampliar el alcance, decidir la siguiente iteración: corpus etiquetado de casos positivos, negativos e inconclusos y métricas reproducibles; después evaluar qué ampliación aporta evidencia útil. GCP y la ejecución aislada de artefactos continúan como etapas posteriores que requieren diseño y autorización.
+
+## Avance local: evaluación de desarrollo (21 nov 2026)
+
+La [evaluación local](15_EVALUACION_LOCAL.md) incorpora 28 casos sintéticos con referencias fijas, sin auditoría independiente. Mide presencia por caso, localización por señal, cobertura/acuerdo de trazado, inconclusos y tiempo. Separa 23 casos del alcance actual, 3 fronteras con omisiones conocidas y 2 errores de entrada; un fallo técnico no cuenta como negativo. La CLI produce tablas o JSON y no crea expedientes.
+
+La primera línea base reproduce 16 de 19 señales de referencia, con 3 omisiones visibles y 4 trazados inconclusos entre los 16 realizados. Revisar las etiquetas y ampliar el corpus con ejemplos independientes precede a cualquier afirmación de calidad general. El próximo cambio funcional puede seleccionarse entre las limitaciones observadas, sin ampliar todos los dominios simultáneamente.
+
+## Avance local: primera mejora medida (21 nov 2026)
+
+El motor 1.1 incorpora [imports directos dentro de funciones](16_IMPORTS_LOCALES.md), junto con corroboración independiente y trazado compatible. Sobre el corpus 1.0 intacto, se reproducen 17 de 19 señales y recorridos, frente a 16 anteriores; quedan dos omisiones y cuatro resultados inconclusos. Se conservan revisiones de componentes 1.0, sin migrar SQLite ni modificar el significado de las señales.
+
+## Avance local: parámetros de funciones independientes (21 nov 2026)
+
+El motor 1.2 distingue parámetros de otras funciones al resolver imports de módulo. El [resumen con guía de capas](17_AMBITO_DE_PARAMETROS_Y_GUIA.md) explica el cambio y el producto actual. El corpus intacto pasa a 18/19 señales y recorridos; conserva una omisión por alias asignado y cuatro trazados inconclusos. La nueva versión no amplía por sí sola la evaluación a proyectos completos ni valida seguridad general.
+
+## Avance local: alias por asignación (21 nov 2026)
+
+El motor 1.3 reconoce [alias de funciones por una asignación simple en el módulo](18_ALIAS_POR_ASIGNACION.md), con corroboración mediante tablas de símbolos y fuente original. El mismo corpus conserva sus fuentes, etiquetas y categorías: se localizan 19/19 señales y los 19 recorridos coinciden con sus referencias, incluidos cuatro inconclusos. Se resuelve la omisión `assignment-alias-gap` sin pérdidas entre las referencias antes coincidentes. Las cadenas de alias, asignaciones locales/condicionales y flujos entre funciones continúan pendientes. La lectura de expedientes 1.0/1.1/1.2 y SQLite 7 se conserva; no es una certificación de seguridad ni de cobertura sobre proyectos reales.
+
+## Avance local: desafío de evaluación separado (21 nov 2026)
+
+El evaluador 1.1 añade [selección de corpus y un desafío de 20 casos](19_CORPUS_DE_DESAFIO.md). El original permanece intacto y predeterminado. El desafío localiza 7/13 señales con el mismo motor 1.3 y hace visibles seis omisiones: alias locales, cadenas, capturas anotadas, imports condicionales y asignaciones locales de otras funciones. Las referencias se fijaron antes de medir y siguen sin auditoría independiente. La siguiente ampliación del motor puede elegirse por estas omisiones; no se agregan dominios, infraestructura o dependencias en esta capa.
+
+## Avance local: alias dentro de funciones (21 nov 2026)
+
+El [motor 1.4 y los trazadores 1.2](20_ALIAS_LOCALES_DE_FUNCIONES.md) reconocen una captura directa del callable dentro de su función, la corroboran con tablas de símbolos y conservan el recorrido del argumento en los casos admitidos. Sobre los mismos corpus, challenge pasa de 7/13 a 9/13 señales y recorridos coincidentes, y baseline mantiene 19/19 con cuatro inconclusos. Quedan cuatro omisiones de desafío. Se conservan historia, contratos y SQLite 7. La suite local registra 513 pruebas aprobadas, dos omisiones de Windows y Ruff limpio; los corpus siguen siendo sintéticos y sin auditoría independiente.

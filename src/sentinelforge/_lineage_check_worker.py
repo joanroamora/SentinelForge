@@ -67,6 +67,17 @@ def replay(call, signal, ancestors, allowance):
             bindings[parameter.arg] = ("parameter", "straight_line_bindings",
                                        [item("parameter", parameter, parameter.arg)])
     barrier = False
+    import_bindings = set()
+    module = owner
+    while module in ancestors:
+        module = ancestors[module]
+    module_references = {
+        alias.asname or alias.name: (statement.lineno, statement.col_offset)
+        for statement in getattr(module, "body", []) if isinstance(statement, ast.Import)
+        for alias in statement.names if alias.name == "subprocess"
+    }
+    for name in bindings:
+        module_references.pop(name, None)
 
     def expression(node):
         if isinstance(node, ast.Constant):
@@ -77,7 +88,7 @@ def replay(call, signal, ancestors, allowance):
             if node.id not in external and node.id in bindings:
                 kind, reason, steps = bindings[node.id]
                 return kind, reason, list(steps)
-            reason = ("control_flow_or_opaque_statement" if barrier and node.id not in external
+            reason = ("control_flow_or_opaque_statement" if (barrier or node.id in import_bindings) and node.id not in external
                       else "binding_out_of_scope")
             return "unknown", reason, [item("unknown", node, node.id)]
         return "unknown", "expression_out_of_scope", [item("unknown", node)]
@@ -86,14 +97,33 @@ def replay(call, signal, ancestors, allowance):
     for statement in before:
         if (isinstance(statement, ast.Assign) and len(statement.targets) == 1 and
                 isinstance(statement.targets[0], ast.Name)):
+            target = statement.targets[0]
+            capture = (isinstance(call.func, ast.Name) and call.func.id == target.id and
+                       isinstance(statement.value, ast.Attribute) and isinstance(statement.value.value, ast.Name) and
+                       signal["call"] == "subprocess." + statement.value.attr and
+                       statement.value.value.id in module_references and
+                       module_references[statement.value.value.id] < (statement.lineno, statement.col_offset))
             kind, reason, path = expression(statement.value)
-            if not isinstance(statement.value, (ast.Name, ast.Constant)):
+            if not isinstance(statement.value, (ast.Name, ast.Constant)) and not capture:
                 bindings.clear()
                 barrier = True
-            target = statement.targets[0]
+            module_references.pop(target.id, None)
             path.append(item("assignment", target, target.id))
             bindings[target.id] = kind, reason, path
             assignment_sources[tuple(span(target).values())] = statement.value
+            import_bindings.discard(target.id)
+        elif isinstance(statement, (ast.Import, ast.ImportFrom)):
+            for alias in statement.names:
+                if alias.name == "*":
+                    bindings.clear()
+                    barrier = True
+                else:
+                    name = alias.asname or alias.name.split(".")[0] if isinstance(statement, ast.Import) else alias.asname or alias.name
+                    bindings.pop(name, None)
+                    import_bindings.add(name)
+                    module_references.pop(name, None)
+                    if isinstance(statement, ast.Import) and alias.name == "subprocess":
+                        module_references[name] = statement.lineno, statement.col_offset
         elif not (isinstance(statement, (ast.Pass, ast.Global, ast.Nonlocal)) or
                   isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Constant)):
             bindings.clear()

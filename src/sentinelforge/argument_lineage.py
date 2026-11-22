@@ -116,9 +116,9 @@ class ArgumentTrace(Contract):
 class ArgumentInvestigation(Contract):
     schema_version: Literal["1.0"] = "1.0"
     investigator: Literal["sentinelforge-backward-slice"] = "sentinelforge-backward-slice"
-    investigator_version: Literal["1.0"] = "1.0"
+    investigator_version: Literal["1.0", "1.1", "1.2"] = "1.2"
     verifier: Literal["sentinelforge-forward-bindings"] = "sentinelforge-forward-bindings"
-    verifier_version: Literal["1.0"] = "1.0"
+    verifier_version: Literal["1.0", "1.1", "1.2"] = "1.2"
     python_version: str = Field(default_factory=platform.python_version)
     checked_at: AwareDatetime = Field(default_factory=lambda: datetime.now(UTC))
     scope: Literal["single_function_assignments"] = "single_function_assignments"
@@ -129,6 +129,7 @@ class ArgumentInvestigation(Contract):
         "Solo sigue asignaciones simples dentro de una función del mismo archivo; no ejecuta código.",
         "Parámetro no significa entrada externa; literal no significa seguro. No evalúa sanitizadores.",
         "No sigue llamadas, flujo de control, atributos, colecciones, cierres ni efectos de otros hilos.",
+        "La captura directa del callable corroborado no corta otros nombres; no se generaliza a propiedades arbitrarias.",
         "32 pasos por señal, 512 en total y 128 sentencias previas; los límites dejan origen desconocido.",
         "El comprobador usa otra estrategia en otro proceso, pero comparte el parser de Python.",
         "No demuestra alcanzabilidad ni explotabilidad. Señales y declaraciones siguen sin verificar.",

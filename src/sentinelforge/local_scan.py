@@ -18,7 +18,7 @@ from .local_source import (
     normalize_source_label,
 )
 
-DETECTOR_VERSION = "1.0"
+DETECTOR_VERSION = "1.4"
 WORKER_TIMEOUT_SECONDS = 5
 MAX_WORKER_OUTPUT_BYTES = 65536
 LIMITATIONS = (
@@ -27,6 +27,7 @@ LIMITATIONS = (
      "no confirma inyección de comandos ni explotabilidad."),
     ("No hay análisis de flujo de datos ni de alcance en ejecución. Los alias dinámicos, "
      "wrappers, valores calculados e imports no admitidos pueden quedar sin detectar."),
+    "Alias asignados: un enlace directo en módulo/función; cadenas y capturas condicionales quedan fuera.",
     "Cero señales significa que esta regla no encontró coincidencias, no que el archivo sea seguro.",
     ("No ejecuta ni importa el artefacto. El proceso del parser tiene tiempo límite, "
      "pero no es un sandbox de permisos ni impone una cuota dura de memoria."),
@@ -67,7 +68,7 @@ class LocalScanReport(Contract):
     report_type: Literal["local_python_scan"] = "local_python_scan"
     is_demo: Literal[False] = False
     detector: Literal["sentinelforge-python-ast"] = "sentinelforge-python-ast"
-    detector_version: Literal["1.0"] = "1.0"
+    detector_version: Literal["1.0", "1.1", "1.2", "1.3", "1.4"] = DETECTOR_VERSION
     python_version: str = Field(default_factory=platform.python_version)
     rules: list[Literal["SF-PY-001"]] = Field(default_factory=lambda: ["SF-PY-001"])
     status: Literal["COMPLETED", "ERROR"]

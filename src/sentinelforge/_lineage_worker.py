@@ -16,6 +16,24 @@ def step(kind, node, symbol=None):
     return dict(kind=kind, symbol=symbol if symbol and len(symbol) <= 120 else None, **location(node))
 
 
+def callable_capture(statement, call, signal, function, parents):
+    """Skip only the unrelated capture of this already-corroborated sink callable."""
+    if not (isinstance(statement, ast.Assign) and len(statement.targets) == 1 and
+            isinstance(statement.targets[0], ast.Name) and isinstance(call.func, ast.Name) and
+            statement.targets[0].id == call.func.id and isinstance(statement.value, ast.Attribute) and
+            isinstance(statement.value.value, ast.Name) and signal["call"] == "subprocess." + statement.value.attr):
+        return False
+    module = function
+    while module in parents:
+        module = parents[module]
+    for declaration in [*getattr(module, "body", []), *function.body]:
+        if isinstance(declaration, ast.Import) and (declaration.lineno, declaration.col_offset) < (statement.lineno, statement.col_offset):
+            for alias in declaration.names:
+                if alias.name == "subprocess" and (alias.asname or alias.name) == statement.value.value.id:
+                    return True
+    return False
+
+
 def investigate(call, signal, parents, capacity):
     sink = step("sink", call, signal["call"])
     keywords = [item.value for item in call.keywords if item.arg == "args"]
@@ -79,7 +97,14 @@ def investigate(call, signal, parents, capacity):
                 if statement.targets[0].id == expression.id:
                     found = previous, statement
                     break
-                if not isinstance(statement.value, (ast.Name, ast.Constant)):
+                if (not isinstance(statement.value, (ast.Name, ast.Constant)) and
+                        not callable_capture(statement, call, signal, function, parents)):
+                    blocked = True
+                    break
+            elif isinstance(statement, (ast.Import, ast.ImportFrom)):
+                names = {alias.asname or (alias.name.split(".")[0] if isinstance(statement, ast.Import)
+                                         else alias.name) for alias in statement.names}
+                if expression.id in names or "*" in names:
                     blocked = True
                     break
             elif not (isinstance(statement, (ast.Pass, ast.Global, ast.Nonlocal)) or

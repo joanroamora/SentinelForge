@@ -3,6 +3,10 @@
 **Multi-Agent Security Analysis Platform**  
 **Estado:** workspace local con detector Python acotado, corroboración de la fuente e investigación del origen del comando mediante asignaciones simples en una función, con comprobador separado. Expedientes SQLite versionados y contexto humano sin verificar. Disponible por CLI/API/web, con una demo simulada identificada.
 
+La evaluación local añade 28 casos sintéticos etiquetados y métricas separadas de detección/localización/trazado. El motor 1.4 reconoce también alias de funciones creados por una asignación simple en el módulo o en la misma función, con corroboración y trazado acotado del argumento: localiza 19/19 señales y sus 19 recorridos coinciden con las referencias, incluidos 4 inconclusos. Las etiquetas son de desarrollo, sin auditoría independiente; no miden seguridad general.
+
+El evaluador 1.1 permite elegir ese corpus `baseline` o un [desafío separado de 20 casos](docs/19_CORPUS_DE_DESAFIO.md): `evaluate --corpus challenge` localiza 9/13 señales y deja visibles cuatro omisiones con el motor 1.4, frente a 7/13 en 1.3. Ambos corpus conservan sus etiquetas y hash. La [capa de alias locales](docs/20_ALIAS_LOCALES_DE_FUNCIONES.md) explica la comparación.
+
 ## Misión
 
 SentinelForge AI analiza artefactos de software autorizados (código, dependencias, Docker e infraestructura como código), investiga hallazgos con subagentes especializados, efectúa verificaciones independientes y produce informes auditables. El producto se usa desde:
@@ -44,6 +48,18 @@ Un flujo vertical demostrable: un proyecto Python de prueba es recibido por CLI 
 - [Expedientes reales, workspace y CLI visual](docs/12_EXPEDIENTES_Y_WORKSPACE.md)
 - [Corroboración de señales con la fuente original](docs/13_CORROBORACION_DE_FUENTES.md)
 - [Origen del comando y comprobación por paso](docs/14_ORIGEN_DEL_COMANDO.md)
+- [Evaluación local: corpus, métricas y límites](docs/15_EVALUACION_LOCAL.md)
+- [Imports locales: mejora medida y compatibilidad](docs/16_IMPORTS_LOCALES.md)
+- [Ámbito de parámetros y guía de capas para empezar](docs/17_AMBITO_DE_PARAMETROS_Y_GUIA.md)
+- [Alias por asignación: alcance y medición 1.3](docs/18_ALIAS_POR_ASIGNACION.md)
+- [Corpus seleccionables y evaluación de desafío](docs/19_CORPUS_DE_DESAFIO.md)
+- [Alias locales: motor 1.4 y trazado 1.2](docs/20_ALIAS_LOCALES_DE_FUNCIONES.md)
+- [ADR 0015: alias locales y captura del callable](docs/adr/0015-alias-locales-y-captura-del-callable.md)
+- [ADR 0014: corpus de desafío separado](docs/adr/0014-evaluacion-con-corpus-seleccionables.md)
+- [ADR 0013: alias de funciones por asignación](docs/adr/0013-alias-de-funciones-por-asignacion.md)
+- [ADR 0012: parámetros de funciones independientes](docs/adr/0012-parametros-de-funciones-independientes.md)
+- [ADR 0011: imports locales y compatibilidad](docs/adr/0011-imports-locales-y-compatibilidad.md)
+- [ADR 0010: corpus y evaluación local](docs/adr/0010-corpus-y-evaluacion-local.md)
 - [ADR 0009: origen local del comando](docs/adr/0009-origen-local-del-comando.md)
 - [ADR 0008: corroboración estática](docs/adr/0008-corroboracion-estatica-de-fuentes.md)
 - [ADR 0007: expedientes y presentación](docs/adr/0007-expedientes-reales-y-presentacion.md)
@@ -87,6 +103,15 @@ Para corroborar un expediente, usar el archivo original con `scan-verify ID ARCH
 Después de corroborar, `scan-trace ID ARCHIVO --submission-id UUID --format pretty` o **Origen del comando** en la web reconstruye asignaciones simples dentro de una función y contrasta los pasos con otra estrategia. El diagrama y el árbol de terminal distinguen recorridos reproducidos, inconclusos y no reproducidos. Se guardan identificadores y ubicaciones, sin valores literales ni código. Consulta [límites, contrato y ejemplos](docs/14_ORIGEN_DEL_COMANDO.md).
 
 ## Ejecutar la demo local
+
+Para medir el motor con las referencias sintéticas incorporadas, sin crear expedientes ni ejecutar las fuentes:
+
+```powershell
+.\.venv\Scripts\python.exe -m sentinelforge.cli --no-animation evaluate --format pretty
+.\.venv\Scripts\python.exe -m sentinelforge.cli --no-animation evaluate --corpus challenge --format pretty
+```
+
+`evaluate --format json` permite conservar y comparar resultados. El código de salida es 0 si coinciden las referencias en alcance, 1 si discrepan y 2 ante error técnico. Las fronteras conocidas se mantienen visibles aunque el gate de regresión pase. Consulta [definiciones y línea base](docs/15_EVALUACION_LOCAL.md).
 
 La demo crea un reporte sintético para comprobar que CLI y API comparten el mismo motor. No analiza ni ejecuta código, y no afirma detectar vulnerabilidades.
 
