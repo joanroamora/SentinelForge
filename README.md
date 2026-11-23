@@ -60,6 +60,7 @@ Un flujo vertical demostrable: un proyecto Python de prueba es recibido por CLI 
 - [Imports constantes de módulo: motor 1.8](docs/24_IMPORTS_CONSTANTES_DE_MODULO.md)
 - [Consolidación local: validación y evidencia](docs/25_CONSOLIDACION_LOCAL.md)
 - [Referencias externas locales y procedencia declarada](docs/26_REFERENCIAS_EXTERNAS.md)
+- [Probar el paquete instalable en un entorno limpio](docs/27_VALIDACION_DEL_PAQUETE.md)
 - [ADR 0021: referencias externas locales](docs/adr/0021-referencias-externas-locales.md)
 - [ADR 0020: validación local y evidencia](docs/adr/0020-validacion-local-y-evidencia.md)
 - [ADR 0019: imports constantes de módulo](docs/adr/0019-imports-constantes-de-modulo.md)

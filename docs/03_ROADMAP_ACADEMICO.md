@@ -176,3 +176,21 @@ y la huella de fuentes coincide al inicio y al final del gate. La CLI JSON,
 terminal y ayuda funcionan con la fixture de protocolo; esta fixture no es una
 evaluación externa independiente. La publicación y CI remota de esta capa siguen
 pendientes.
+
+## Avance local — preparar la prueba de distribución (23 nov 2026)
+
+La [prueba del wheel](27_VALIDACION_DEL_PAQUETE.md) permite construir el paquete
+e instalarlo en un entorno temporal dentro del repositorio. Comprueba los
+archivos entregados, la procedencia del módulo, la versión de OpenAPI y el uso
+de los corpus desde el comando instalado. Su ejecución requiere autorización
+para instalar las dependencias. La prueba habitual del código sigue disponible
+con la `.venv` existente.
+
+Al preparar esta capa se corrigió la versión que devolvía el módulo Python.
+El código y OpenAPI anuncian 0.2.0 y una prueba los contrasta con los metadatos
+de distribución declarados. La revisión independiente de las etiquetas de
+evaluación continúa pendiente de un conjunto aportado por un revisor.
+
+La validación del checkout aprobó 868 pruebas con 2 omitidas y Ruff limpio.
+La copia temporal reprodujo los 31 archivos del paquete. La instalación del
+wheel queda pendiente de la autorización para obtener las dependencias.
