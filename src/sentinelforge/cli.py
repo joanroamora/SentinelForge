@@ -71,6 +71,24 @@ def evaluate(output: Annotated[OutputFormat, typer.Option("--format")] = OutputF
 
 
 @app.command()
+def evaluate_file(file: str,
+                  output: Annotated[OutputFormat, typer.Option("--format")] = OutputFormat.auto) -> None:
+    """Compara todas las referencias de un JSON local; su autoría queda sin autenticar."""
+    try:
+        if human_output(output):
+            with console().status("Contrastando referencias aportadas localmente…", spinner="dots"):
+                result = AnalysisService().evaluate_local_corpus(file)
+        else:
+            result = AnalysisService().evaluate_local_corpus(file)
+    except EvaluationError as error:
+        typer.echo(str(error), err=True)
+        raise typer.Exit(code=2) from error
+    emit(result, output)
+    if result.acceptance != "pass":
+        raise typer.Exit(code=2 if result.acceptance == "error" else 1)
+
+
+@app.command()
 def scan_file(file: str, output: Annotated[OutputFormat, typer.Option("--format")] = OutputFormat.auto) -> None:
     """Inspecciona un .py relativo al directorio actual sin ejecutar su código."""
     report = AnalysisService().scan_local_file(file)

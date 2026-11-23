@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0",
+  "id": "external-protocol-example",
+  "version": "1.0",
+  "corpus_type": "external_synthetic",
+  "reference_method": "authored_static_expectations",
+  "reference_review": "not_independently_audited",
+  "provenance": {
+    "actor": "example-reviewer",
+    "role": "reviewer",
+    "reference": "synthetic-protocol-example",
+    "created_at": "2026-11-23T00:00:00Z"
+  },
+  "cases": [
+    {
+      "id": "negative-no-shell",
+      "scope": "in_scope",
+      "rationale": "Ejemplo del formato, sin auditoria independiente ni medicion representativa.",
+      "source": "raise RuntimeError('EXAMPLE_MUST_NOT_RUN')\n",
+      "expected_signals": [],
+      "expected_error": null
+    }
+  ]
+}

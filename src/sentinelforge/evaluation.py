@@ -22,6 +22,7 @@ from .evaluation_contracts import (
     EvaluationReport,
     GroupMetrics,
     LocalizationMetrics,
+    ReferenceCorpus,
     TargetEvaluation,
     TraceMetrics,
     observed_reference,
@@ -72,6 +73,7 @@ def _engine_digest() -> str:
         "contracts.py", "local_source.py", "local_scan.py", "_scan_worker.py",
         "source_review.py", "_review_worker.py", "argument_lineage.py", "_lineage_worker.py",
         "_lineage_check_worker.py", "evaluation_contracts.py", "evaluation.py",
+        "external_evaluation.py",
     )
     try:
         return _digest({name: hashlib.sha256(Path(__file__).with_name(name).read_bytes()
@@ -181,14 +183,14 @@ def summarize(cases: list[CaseEvaluation]) -> GroupMetrics:
                         detection=detection, localization=localization, tracing=tracing)
 
 
-def evaluate_corpus(corpus: EvaluationCorpus, *, budget_seconds: float = MAX_EVALUATION_SECONDS) -> EvaluationReport:
+def evaluate_corpus(corpus: ReferenceCorpus, *, budget_seconds: float = MAX_EVALUATION_SECONDS) -> EvaluationReport:
     if not math.isfinite(budget_seconds) or not 0 < budget_seconds <= MAX_EVALUATION_SECONDS:
         raise EvaluationError("evaluation_invalid_budget")
     start = time.perf_counter()
     engine_digest = _engine_digest()
-    corpus_digest = _digest(corpus.model_dump())
+    corpus_digest = _digest(corpus.model_dump(mode="json"))
     cases = [_evaluate_case(case, start + budget_seconds) for case in corpus.cases]
-    if _engine_digest() != engine_digest or _digest(corpus.model_dump()) != corpus_digest:
+    if _engine_digest() != engine_digest or _digest(corpus.model_dump(mode="json")) != corpus_digest:
         raise EvaluationError("evaluation_inputs_changed")
     failures = [case.id for case in cases if case.scope != "boundary" and not case.reference_match]
     partial = any(case.technical_error for case in cases)

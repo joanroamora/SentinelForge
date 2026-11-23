@@ -24,7 +24,8 @@ from .demo_fixture import (
     STATEMENT_TEXT,
 )
 from .evaluation import evaluate_corpus, load_builtin_corpus
-from .evaluation_contracts import BuiltinCorpus, EvaluationReport
+from .evaluation_contracts import BuiltinCorpus, EvaluationReport, ExternalEvaluationReceipt
+from .external_evaluation import evaluate_local_corpus
 from .local_scan import LocalScanReport, scan_local_file, scan_source_bytes
 from .local_source import load_local_source
 from .monitor import MonitorAnswerReceipt, MonitorAnswerRequest, MonitorQuestion
@@ -49,6 +50,11 @@ class AnalysisService:
     def evaluate_builtin_corpus(self, corpus: BuiltinCorpus = BuiltinCorpus.baseline) -> EvaluationReport:
         """Measure fixed synthetic references locally without creating analysis records."""
         return evaluate_corpus(load_builtin_corpus(corpus))
+
+    def evaluate_local_corpus(self, relative_path: str, *,
+                              root: Path | None = None) -> ExternalEvaluationReceipt:
+        """Compare supplied synthetic references without creating database records."""
+        return evaluate_local_corpus(Path.cwd() if root is None else root, relative_path)
 
     def scan_local_file(self, relative_path: str, *, root: Path | None = None) -> LocalScanReport:
         """Inspect one file relative to the caller's authorized local root; do not persist it."""
