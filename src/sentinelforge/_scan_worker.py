@@ -1,13 +1,15 @@
 """Bounded, standalone AST worker; input is data and is never imported or executed.
 
 Run with ``python -I -S path/to/_scan_worker.py``. Only stdlib imports belong here.
-Module aliases ignore unassigned parameters of unrelated named functions;
+Module imports ignore unassigned parameters and simple direct local assignments
+of unrelated named functions, provided no global/nonlocal declaration competes;
 other binding and mutation checks remain conservative. Function-local
 imports must be direct body statements before the call in the same function;
-rebindings in that function suppress them. Closures and conditional imports
-remain outside this bounded resolver.
-Assigned callables allow one direct module/function assignment from a stable import;
-chains, conditional captures and competing bindings remain outside that extension.
+rebindings in that function suppress them. Module-level literal-true, import-only
+blocks without else are admitted; other conditional imports and closures remain out.
+Assigned callables allow direct function captures and bounded module capture chains;
+module annotations allow a simple name or inert string, with an assigned value;
+conditional captures and competing bindings remain outside that extension.
 This is a process boundary for parser failures, not an operating-system sandbox.
 """
 
@@ -18,6 +20,7 @@ import sys
 MAX_SOURCE_BYTES = 65_536
 MAX_AST_NODES = 20_000
 MAX_SIGNALS = 100
+MAX_ALIAS_CAPTURES = 8
 SUBPROCESS_FUNCTIONS = frozenset({"run", "Popen", "call", "check_call", "check_output"})
 TYPE_PARAMETERS = tuple(
     getattr(ast, name) for name in ("TypeVar", "ParamSpec", "TypeVarTuple") if hasattr(ast, name)
@@ -49,10 +52,50 @@ def _attribute_root(node: ast.AST) -> str | None:
     return node.id if isinstance(node, ast.Name) else None
 
 
+def _local_assignment_owners(nodes: list[ast.AST]) -> dict:
+    """Only direct, simple function-local stores may be ignored by a module reader."""
+    declared = {name for node in nodes if isinstance(node, (ast.Global, ast.Nonlocal))
+                for name in node.names}
+    owners = {}
+    for function in nodes:
+        if not isinstance(function, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        direct: dict[str, set[ast.Name]] = {}
+        for statement in function.body:
+            if (isinstance(statement, ast.Assign) and len(statement.targets) == 1
+                    and isinstance(statement.targets[0], ast.Name)):
+                target = statement.targets[0]
+                if target.id not in declared:
+                    direct.setdefault(target.id, set()).add(target)
+        if not direct:
+            continue
+        for node in ast.walk(function):
+            if (isinstance(node, ast.Name) and isinstance(node.ctx, (ast.Store, ast.Del))
+                    and node not in direct.get(node.id, ())):
+                direct.pop(node.id, None)
+        owners.update((target, function) for targets in direct.values() for target in targets)
+    return owners
+
+
+def _imports_in_scope(tree: ast.Module | ast.FunctionDef | ast.AsyncFunctionDef
+                      ) -> list[ast.Import | ast.ImportFrom]:
+    declarations = []
+    for statement in tree.body:
+        if isinstance(statement, (ast.Import, ast.ImportFrom)):
+            declarations.append(statement)
+        elif (isinstance(tree, ast.Module) and isinstance(statement, ast.If)
+              and isinstance(statement.test, ast.Constant) and statement.test.value is True
+              and not statement.orelse
+              and all(isinstance(item, (ast.Import, ast.ImportFrom)) for item in statement.body)):
+            declarations.extend(statement.body)
+    return declarations
+
+
 def _aliases(tree: ast.Module | ast.FunctionDef | ast.AsyncFunctionDef,
              nodes: list[ast.AST], parameter_owners: dict | None = None,
-             visible_functions: frozenset | None = None) -> dict[str, tuple[str, int, int]]:
-    imports = [node for node in tree.body if isinstance(node, (ast.Import, ast.ImportFrom))]
+             visible_functions: frozenset | None = None,
+             assignment_owners: dict | None = None) -> dict[str, tuple[str, int, int]]:
+    imports = _imports_in_scope(tree)
     allowed_ids = {id(node) for node in imports}
     aliases: dict[str, tuple[str, int, int]] = {}
     blocked: set[str] = set()
@@ -71,6 +114,9 @@ def _aliases(tree: ast.Module | ast.FunctionDef | ast.AsyncFunctionDef,
             if id(node) not in allowed_ids:
                 blocked.update(_import_bindings(node))
         elif isinstance(node, ast.Name) and isinstance(node.ctx, (ast.Store, ast.Del)):
+            owner = None if assignment_owners is None else assignment_owners.get(node)
+            if owner is not None and visible_functions is not None and owner not in visible_functions:
+                continue
             blocked.add(node.id)
         elif isinstance(node, (ast.Attribute, ast.Subscript)) and isinstance(
             node.ctx, (ast.Store, ast.Del)
@@ -97,37 +143,41 @@ def _aliases(tree: ast.Module | ast.FunctionDef | ast.AsyncFunctionDef,
     return {name: target for name, target in aliases.items() if name not in blocked}
 
 
+def _capture_destination(statement: ast.stmt, module_scope: bool) -> ast.Name | None:
+    if isinstance(statement, ast.Assign) and len(statement.targets) == 1:
+        target = statement.targets[0]
+        return target if isinstance(target, ast.Name) else None
+    if (module_scope and isinstance(statement, ast.AnnAssign) and statement.simple == 1
+            and isinstance(statement.target, ast.Name) and statement.value is not None
+            and (isinstance(statement.annotation, ast.Name) or
+                 isinstance(statement.annotation, ast.Constant) and
+                 isinstance(statement.annotation.value, str))):
+        return statement.target
+    return None
+
+
 def _assigned_aliases(tree: ast.Module | ast.FunctionDef | ast.AsyncFunctionDef, nodes: list[ast.AST],
                      imports: dict[str, tuple[str, int, int]], parameter_owners: dict | None,
                      visible_functions: frozenset) -> dict[str, tuple[str, int, int]]:
-    """Capture one imported callable; its only store must be this direct assignment."""
-    candidates: dict[str, tuple[str, int, int, ast.Name]] = {}
+    """Propagate stable module captures forward; function captures remain direct."""
+    module_scope = isinstance(tree, ast.Module)
+    candidates: dict[str, tuple[ast.stmt, ast.Name]] = {}
     blocked: set[str] = set()
+    hidden: set[str] = set()
     for statement in tree.body:
-        if not (isinstance(statement, ast.Assign) and len(statement.targets) == 1
-                and isinstance(statement.targets[0], ast.Name)):
+        destination = _capture_destination(statement, module_scope)
+        if destination is None:
             continue
-        value = statement.value
-        root = value.id if isinstance(value, ast.Name) else (
-            value.value.id if isinstance(value, ast.Attribute) and isinstance(value.value, ast.Name)
-            else None)
-        imported = imports.get(root)
-        if imported is None or imported[1:] >= (statement.lineno, statement.col_offset):
-            continue
-        target = imported[0] if isinstance(value, ast.Name) else (
-            value.attr if imported[0] == "module" else None)
-        if target not in SUBPROCESS_FUNCTIONS:
-            continue
-        name = statement.targets[0].id
+        name = destination.id
         if name in candidates:
             blocked.add(name)
-        candidates[name] = target, statement.lineno, statement.col_offset, statement.targets[0]
+        candidates[name] = statement, destination
     if not candidates:
         return {}
     for node in nodes:
         if isinstance(node, ast.Name) and isinstance(node.ctx, (ast.Store, ast.Del)):
             candidate = candidates.get(node.id)
-            if candidate is not None and node is not candidate[3]:
+            if candidate is not None and node is not candidate[1]:
                 blocked.add(node.id)
         elif isinstance(node, (ast.Import, ast.ImportFrom)):
             if any(alias.name == "*" for alias in node.names):
@@ -135,8 +185,10 @@ def _assigned_aliases(tree: ast.Module | ast.FunctionDef | ast.AsyncFunctionDef,
             blocked.update(_import_bindings(node))
         elif isinstance(node, ast.arg):
             owner = None if parameter_owners is None else parameter_owners.get(node)
-            if owner is None or owner in visible_functions:
+            if owner is None:
                 blocked.add(node.arg)
+            elif owner in visible_functions:
+                hidden.add(node.arg)
         elif isinstance(node, (ast.Attribute, ast.Subscript)) and isinstance(node.ctx, (ast.Store, ast.Del)):
             root = _attribute_root(node)
             if root is not None:
@@ -150,7 +202,29 @@ def _assigned_aliases(tree: ast.Module | ast.FunctionDef | ast.AsyncFunctionDef,
             blocked.update(node.names)
         elif isinstance(node, TYPE_PARAMETERS):
             blocked.add(node.name)
-    return {name: candidate[:3] for name, candidate in candidates.items() if name not in blocked}
+
+    captured: dict[str, tuple[str, int, int, int]] = {}
+    for name, (statement, _) in candidates.items():
+        if name in blocked:
+            continue
+        value = statement.value
+        root = value.id if isinstance(value, ast.Name) else (
+            value.value.id if isinstance(value, ast.Attribute) and isinstance(value.value, ast.Name)
+            else None)
+        reference, depth = imports.get(root), 1
+        if reference is None and module_scope and isinstance(value, ast.Name):
+            previous = captured.get(root)
+            if previous is not None:
+                reference, depth = previous[:3], previous[3] + 1
+        if (reference is None or reference[1:] >= (statement.lineno, statement.col_offset)
+                or depth > MAX_ALIAS_CAPTURES):
+            continue
+        target = reference[0] if isinstance(value, ast.Name) else (
+            value.attr if reference[0] == "module" else None)
+        if target in SUBPROCESS_FUNCTIONS:
+            captured[name] = target, statement.lineno, statement.col_offset, depth
+    # Intermediate captures occurred in the module, before callee parameters existed.
+    return {name: value[:3] for name, value in captured.items() if name not in hidden}
 
 
 def _function_body_scope(node: ast.AST, parents: dict[ast.AST, ast.AST]) -> ast.FunctionDef | ast.AsyncFunctionDef | None:
@@ -201,7 +275,8 @@ def scan_source(raw: bytes) -> dict:
                 return {"signals": [], "error": "source_too_complex"}
         parents = {child: node for node in nodes for child in ast.iter_child_nodes(node)}
         parameter_owners = {node: _parameter_function(node, parents) for node in nodes if isinstance(node, ast.arg)}
-        captured_imports = _aliases(tree, nodes, parameter_owners, frozenset())
+        assignment_owners = _local_assignment_owners(nodes)
+        captured_imports = _aliases(tree, nodes, parameter_owners, frozenset(), assignment_owners)
         module_imports = {}
         module_aliases = {}
         local_aliases = {}
@@ -217,7 +292,8 @@ def scan_source(raw: bytes) -> dict:
             target = None
             visible_functions = _enclosing_functions(node, parents)
             if visible_functions not in module_aliases:
-                module_imports[visible_functions] = _aliases(tree, nodes, parameter_owners, visible_functions)
+                module_imports[visible_functions] = _aliases(
+                    tree, nodes, parameter_owners, visible_functions, assignment_owners)
                 module_aliases[visible_functions] = (
                     module_imports[visible_functions] |
                     _assigned_aliases(tree, nodes, captured_imports, parameter_owners, visible_functions)

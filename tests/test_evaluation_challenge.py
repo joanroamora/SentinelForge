@@ -18,7 +18,9 @@ GAPS = {
     "two-hop-module-alias", "annotated-module-capture",
     "constant-true-conditional-import", "unrelated-local-assignment",
 }
-RESOLVED = {"function-assignment-global-import", "function-assignment-local-import"}
+RESOLVED = {"function-assignment-global-import", "function-assignment-local-import",
+            "unrelated-local-assignment", "annotated-module-capture", "two-hop-module-alias",
+            "constant-true-conditional-import"}
 
 
 @pytest.fixture(scope="module")
@@ -44,7 +46,7 @@ def test_reference_sets_have_distinct_pinned_identities_and_original_sources_are
 def test_measured_challenge_separates_detection_and_trace_limits_from_supported_cases(challenge_report):
     report = challenge_report
     assert report.corpus_id == "sf-py-001-challenge" and report.corpus_sha256 == CHALLENGE_HASH
-    assert report.evaluator_version == "1.1" and report.detector_version == "1.4"
+    assert report.evaluator_version == "1.1" and report.detector_version == "1.8"
     assert report.acceptance == "pass" and report.status == "COMPLETED"
     assert not report.reference_failures and report.expected_error_matches == 2
     assert set(report.boundary_gaps) == GAPS - RESOLVED
@@ -54,10 +56,10 @@ def test_measured_challenge_separates_detection_and_trace_limits_from_supported_
     assert supported.detection.true_negatives == 6 and supported.detection.false_positives == 0
     assert supported.localization.matched == supported.tracing.traced == 7
     assert total.eligible_detection_cases == 18 and total.technical_errors == 0
-    assert total.detection.false_negatives == 4 and total.detection.recall == pytest.approx(8 / 12)
-    assert total.localization.matched == 9 and total.localization.missed == 4
-    assert total.localization.recall == total.tracing.coverage == pytest.approx(9 / 13)
-    assert total.tracing.reference_agreement_end_to_end == pytest.approx(9 / 13)
+    assert total.detection.false_negatives == 0 and total.detection.recall == 1.0
+    assert total.localization.matched == 13 and total.localization.missed == 0
+    assert total.localization.recall == total.tracing.coverage == 1.0
+    assert total.tracing.reference_agreement_end_to_end == 1.0
     assert total.tracing.inconclusive == 0
     assert all(not case.reference_match and not case.observed_signals
                for case in report.cases if case.id in GAPS - RESOLVED)
@@ -111,7 +113,7 @@ def test_wrong_packaged_identity_cannot_silently_replace_a_reference_set(selecti
         load_builtin_corpus(selection)
 
 
-def test_cli_forwards_selection_and_keeps_omissions_visible_in_both_formats(challenge_report, monkeypatch):
+def test_cli_forwards_selection_and_renders_the_completed_reference_set_in_both_formats(challenge_report, monkeypatch):
     selected = []
 
     def evaluate(self, corpus):
@@ -126,7 +128,7 @@ def test_cli_forwards_selection_and_keeps_omissions_visible_in_both_formats(chal
     pretty = CliRunner().invoke(app, ["--no-animation", "evaluate", "--corpus", "challenge", "--format", "pretty"])
     assert pretty.exit_code == 0, pretty.output
     assert "sf-py-001-challenge" in pretty.stdout and "Fronteras" in pretty.stdout
-    assert "Señal no detectada" in pretty.stdout
+    assert "Señal no detectada" not in pretty.stdout
     assert selected == [BuiltinCorpus.challenge, BuiltinCorpus.challenge]
     assert "\x1b" not in pretty.stdout
 

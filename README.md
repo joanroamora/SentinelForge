@@ -3,9 +3,9 @@
 **Multi-Agent Security Analysis Platform**  
 **Estado:** workspace local con detector Python acotado, corroboración de la fuente e investigación del origen del comando mediante asignaciones simples en una función, con comprobador separado. Expedientes SQLite versionados y contexto humano sin verificar. Disponible por CLI/API/web, con una demo simulada identificada.
 
-La evaluación local añade 28 casos sintéticos etiquetados y métricas separadas de detección/localización/trazado. El motor 1.4 reconoce también alias de funciones creados por una asignación simple en el módulo o en la misma función, con corroboración y trazado acotado del argumento: localiza 19/19 señales y sus 19 recorridos coinciden con las referencias, incluidos 4 inconclusos. Las etiquetas son de desarrollo, sin auditoría independiente; no miden seguridad general.
+La evaluación local añade 28 casos sintéticos etiquetados y métricas separadas de detección/localización/trazado. El motor 1.8 reconoce imports en bloques `if True` de módulo formados solo por imports y sin `else`, además de hasta ocho capturas encadenadas, las anotaciones admitidas y los ámbitos independientes ya soportados. Con corroboración y trazado acotado del argumento, localiza 19/19 señales y sus 19 recorridos coinciden con las referencias, incluidos 4 inconclusos. Las etiquetas son de desarrollo, sin auditoría independiente; no miden seguridad general.
 
-El evaluador 1.1 permite elegir ese corpus `baseline` o un [desafío separado de 20 casos](docs/19_CORPUS_DE_DESAFIO.md): `evaluate --corpus challenge` localiza 9/13 señales y deja visibles cuatro omisiones con el motor 1.4, frente a 7/13 en 1.3. Ambos corpus conservan sus etiquetas y hash. La [capa de alias locales](docs/20_ALIAS_LOCALES_DE_FUNCIONES.md) explica la comparación.
+El evaluador 1.1 permite elegir ese corpus `baseline` o un [desafío separado de 20 casos](docs/19_CORPUS_DE_DESAFIO.md): `evaluate --corpus challenge` localiza 13/13 señales y sus recorridos coinciden con las referencias con el motor 1.8, frente a 12/13 en 1.7. Ambos corpus conservan etiquetas y hash; resolverlos no acredita cobertura en proyectos reales. La [capa de imports constantes](docs/24_IMPORTS_CONSTANTES_DE_MODULO.md) explica la comparación, el rechazo de imports competidores y las fronteras del trazado que se conservan.
 
 ## Misión
 
@@ -54,6 +54,15 @@ Un flujo vertical demostrable: un proyecto Python de prueba es recibido por CLI 
 - [Alias por asignación: alcance y medición 1.3](docs/18_ALIAS_POR_ASIGNACION.md)
 - [Corpus seleccionables y evaluación de desafío](docs/19_CORPUS_DE_DESAFIO.md)
 - [Alias locales: motor 1.4 y trazado 1.2](docs/20_ALIAS_LOCALES_DE_FUNCIONES.md)
+- [Asignaciones en funciones independientes: motor 1.5](docs/21_ASIGNACIONES_EN_FUNCIONES_INDEPENDIENTES.md)
+- [Alias anotados de módulo: motor 1.6](docs/22_ALIAS_ANOTADOS_DE_MODULO.md)
+- [Cadenas de alias de módulo: motor 1.7](docs/23_CADENAS_DE_ALIAS_DE_MODULO.md)
+- [Imports constantes de módulo: motor 1.8](docs/24_IMPORTS_CONSTANTES_DE_MODULO.md)
+- [Consolidación local: validación y evidencia](docs/25_CONSOLIDACION_LOCAL.md)
+- [ADR 0019: imports constantes de módulo](docs/adr/0019-imports-constantes-de-modulo.md)
+- [ADR 0018: cadenas acotadas de alias de módulo](docs/adr/0018-cadenas-acotadas-de-alias-de-modulo.md)
+- [ADR 0017: alias anotados de módulo](docs/adr/0017-alias-anotados-de-modulo.md)
+- [ADR 0016: asignaciones locales de funciones independientes](docs/adr/0016-asignaciones-locales-de-funciones-independientes.md)
 - [ADR 0015: alias locales y captura del callable](docs/adr/0015-alias-locales-y-captura-del-callable.md)
 - [ADR 0014: corpus de desafío separado](docs/adr/0014-evaluacion-con-corpus-seleccionables.md)
 - [ADR 0013: alias de funciones por asignación](docs/adr/0013-alias-de-funciones-por-asignacion.md)
@@ -101,6 +110,26 @@ La animación aparece brevemente en los resultados visuales. `--no-animation` an
 Para corroborar un expediente, usar el archivo original con `scan-verify ID ARCHIVO --submission-id UUID --format pretty` o la sección **Corroboración de la fuente** en la web. Se compara el hash y se revisa el patrón con una implementación separada. El resultado crea una nueva revisión; no confirma explotabilidad ni verifica las declaraciones humanas. Consulta [alcance y ejemplos](docs/13_CORROBORACION_DE_FUENTES.md).
 
 Después de corroborar, `scan-trace ID ARCHIVO --submission-id UUID --format pretty` o **Origen del comando** en la web reconstruye asignaciones simples dentro de una función y contrasta los pasos con otra estrategia. El diagrama y el árbol de terminal distinguen recorridos reproducidos, inconclusos y no reproducidos. Se guardan identificadores y ubicaciones, sin valores literales ni código. Consulta [límites, contrato y ejemplos](docs/14_ORIGEN_DEL_COMANDO.md).
+
+## Validar la base local antes de integrar cambios
+
+Con la `.venv` existente, desde la raíz:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/validate_local.py
+```
+
+En Linux/macOS, usar `./.venv/bin/python scripts/validate_local.py`.
+El comando exige el entorno del repositorio y ejecuta Ruff, pytest y ambos
+corpus por CLI. Guarda logs, evaluaciones JSON y un manifiesto en una carpeta
+única de `.local/validation/`, ignorada por Git. Comprueba que las evaluaciones
+pertenezcan al motor y las referencias actuales y compara la huella del código
+antes y después. Un fallo detiene las comprobaciones siguientes.
+
+La CI usa el mismo comando en su matriz existente. Esta evidencia local no
+acredita una ejecución remota, construcción del wheel ni auditoría independiente.
+No instala dependencias ni publica cambios. Consulta [alcance, códigos de salida
+y límites](docs/25_CONSOLIDACION_LOCAL.md).
 
 ## Ejecutar la demo local
 
