@@ -123,7 +123,10 @@ def test_local_source_is_data_and_never_executed_or_retained(tmp_path):
 
 
 @pytest.mark.parametrize(("legacy_version", "lineage_version"), [
-    ("1.0", "1.0"), ("1.1", "1.1"), ("1.2", "1.1"), ("1.3", "1.1"),
+    ("1.0", "1.0"), ("1.1", "1.1"), ("1.2", "1.1"), ("1.3", "1.1"), ("1.4", "1.2"),
+    ("1.5", "1.2"),
+    ("1.6", "1.2"),
+    ("1.7", "1.2"),
 ])
 def test_legacy_component_versions_and_rows_survive_new_detector(tmp_path, monkeypatch, legacy_version, lineage_version):
     database = tmp_path / "legacy.sqlite3"
@@ -149,7 +152,7 @@ def test_legacy_component_versions_and_rows_survive_new_detector(tmp_path, monke
     assert historical.argument_investigation.verifier_version == lineage_version
     assert restarted.trace_source_bytes(old_case.id, module_source, receipt.submission_id) == receipt
     new_case = restarted.create_source_scan("same.py", module_source)
-    assert new_case.report.detector_version == "1.4" and new_case.id != old_case.id
+    assert new_case.report.detector_version == "1.8" and new_case.id != old_case.id
     with sqlite3.connect(database) as connection:
         assert connection.execute("PRAGMA user_version").fetchone()[0] == 7
         assert set(before).issubset(set(connection.execute("SELECT record_json FROM local_scan_revisions").fetchall()))
@@ -163,10 +166,10 @@ def test_api_and_cli_use_the_improved_pipeline_without_confirming_risk(tmp_path,
         async with AsyncClient(transport=ASGITransport(app=create_app(database_path=database)), base_url="http://test") as client:
             headers = {"Content-Type": "application/octet-stream"}
             case = (await client.post("/v1/local-scans?filename=local.py", content=SOURCE, headers=headers)).json()
-            assert case["report"]["detector_version"] == "1.4" and len(case["report"]["signals"]) == 1
+            assert case["report"]["detector_version"] == "1.8" and len(case["report"]["signals"]) == 1
             identity = case["id"]
             verified = await client.post(f"/v1/local-scans/{identity}/verify?submission_id={uuid4()}", content=SOURCE, headers=headers)
-            assert verified.status_code == 200 and verified.json()["review"]["verifier_version"] == "1.4"
+            assert verified.status_code == 200 and verified.json()["review"]["verifier_version"] == "1.8"
             traced = await client.post(f"/v1/local-scans/{identity}/trace?submission_id={key}", content=SOURCE, headers=headers)
             assert traced.status_code == 200 and traced.json()["revision"] == 3
             latest = (await client.get(f"/v1/local-scans/{identity}")).json()

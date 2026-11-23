@@ -50,7 +50,7 @@ class SourceDecision(Contract):
 class SourceReview(Contract):
     schema_version: Literal["1.0"] = "1.0"
     verifier: Literal["sentinelforge-source-check"] = "sentinelforge-source-check"
-    verifier_version: Literal["1.0", "1.1", "1.2", "1.3", "1.4"] = "1.4"
+    verifier_version: Literal["1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7", "1.8"] = "1.8"
     python_version: str = Field(default_factory=platform.python_version)
     checked_at: AwareDatetime = Field(default_factory=lambda: datetime.now(UTC))
     scope: Literal["static_pattern_only"] = "static_pattern_only"
@@ -62,7 +62,9 @@ class SourceReview(Contract):
         "No demuestra alcanzabilidad, inyección de comandos, origen no confiable ni explotabilidad.",
         "No verifica identidad ni declaraciones humanas. Las señales mantienen su estado unverified.",
         "Comparte el parser de Python con el detector; su implementación y proceso son distintos.",
-        "Los alias por asignación requieren un enlace directo y estable en el módulo o la misma función.",
+        "Alias asignados: hasta 8 capturas estables en módulo; en función solo un enlace directo a un import.",
+        "Capturas anotadas: solo de módulo, con anotación de nombre o texto; no evalúa ni comprueba tipos.",
+        "Imports de if True: solo bloque directo del módulo, sin else y formado por imports.",
     ])
 
 

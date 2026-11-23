@@ -10,13 +10,20 @@ import sys
 import tokenize
 
 FUNCTIONS = {"run", "Popen", "call", "check_call", "check_output"}
+MAX_ALIAS_CAPTURES = 8
 
 
 def imported_target(root, call, tree, nodes, symbols, parents):
     """Use compiler symbol tables plus original imports, not the detector's alias resolver."""
     bindings = []
-    for node in tree.body:
+    for node in nodes:
         if isinstance(node, (ast.Import, ast.ImportFrom)):
+            owner = parents.get(node)
+            admitted = owner is tree
+            if not admitted and isinstance(owner, ast.If) and parents.get(owner) is tree:
+                admitted = (isinstance(owner.test, ast.Constant) and owner.test.value is True
+                            and not owner.orelse and
+                            all(isinstance(item, (ast.Import, ast.ImportFrom)) for item in owner.body))
             for alias in node.names:
                 if alias.name == "*":
                     return None
@@ -24,6 +31,8 @@ def imported_target(root, call, tree, nodes, symbols, parents):
                                         else alias.name)
                 if name != root:
                     continue
+                if not admitted:
+                    return None
                 if isinstance(node, ast.Import):
                     target = "subprocess" if alias.name == "subprocess" else None
                 else:
@@ -49,10 +58,38 @@ def imported_target(root, call, tree, nodes, symbols, parents):
     return bindings[0][0]
 
 
+def simple_function_local(root, symbol, function):
+    """Require a compiler-local binding and reread every store in the original body."""
+    if (not symbol.is_local() or not symbol.is_assigned() or symbol.is_imported() or
+            symbol.is_global() or symbol.is_nonlocal() or symbol.is_namespace()):
+        return False
+    stores = {statement.targets[0] for statement in function.body
+              if isinstance(statement, ast.Assign) and len(statement.targets) == 1
+              and isinstance(statement.targets[0], ast.Name) and statement.targets[0].id == root}
+    if not stores:
+        return False
+    for node in ast.walk(function):
+        if (isinstance(node, ast.Name) and node.id == root and
+                isinstance(node.ctx, (ast.Store, ast.Del)) and node not in stores):
+            return False
+        if (isinstance(node, (ast.ExceptHandler, ast.MatchAs, ast.MatchStar)) and
+                node.name == root or isinstance(node, ast.MatchMapping) and node.rest == root):
+            return False
+    return True
+
+
 def module_binding_visible(root, call, nodes, symbols, parents):
     """A compiler-local symbol must not replace the module name at this call."""
-    named_functions = {(node.name, node.lineno) for node in nodes
+    # Inlined comprehensions need not have child symbol tables on every Python.
+    # Keep their bindings conservative even when the compiler omits that table.
+    if any(isinstance(node, ast.comprehension) and
+           any(isinstance(target, ast.Name) and target.id == root
+               for target in ast.walk(node.target)) for node in nodes):
+        return False
+    named_functions = {(node.name, node.lineno): node for node in nodes
                        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))}
+    declared = any(isinstance(node, (ast.Global, ast.Nonlocal)) and root in node.names
+                   for node in nodes)
     visible = set()
     current = call
     while current in parents:
@@ -66,54 +103,93 @@ def module_binding_visible(root, call, nodes, symbols, parents):
         if root in table.get_identifiers():
             entry = table.lookup(root)
             key = (table.get_name(), table.get_lineno())
-            if (table.get_type() == "function" and key in named_functions and key not in visible and
-                    entry.is_parameter() and not entry.is_assigned() and not entry.is_imported() and
-                    not entry.is_namespace()):
-                continue
+            if table.get_type() == "function" and key in named_functions and key not in visible:
+                if (entry.is_parameter() and not entry.is_assigned() and not entry.is_imported()
+                        and not entry.is_namespace()):
+                    continue
+                if not declared and simple_function_local(root, entry, named_functions[key]):
+                    continue
             if entry.is_local() or entry.is_parameter() or entry.is_imported() or entry.is_assigned():
                 return False
     return True
 
 
-def assigned_target(root, call, tree, nodes, symbols, parents):
-    """Reconstruct one module assignment using original imports and compiler symbols."""
-    declarations = [node for node in tree.body if isinstance(node, ast.Assign) and
-                    len(node.targets) == 1 and isinstance(node.targets[0], ast.Name)
-                    and node.targets[0].id == root]
-    if len(declarations) != 1 or root not in symbols.get_identifiers():
-        return None
-    declaration = declarations[0]
-    if (declaration.lineno, declaration.col_offset) >= (call.lineno, call.col_offset):
-        return None
-    symbol = symbols.lookup(root)
-    if not symbol.is_assigned() or symbol.is_imported() or symbol.is_namespace():
-        return None
-    if not module_binding_visible(root, call, nodes, symbols, parents):
-        return None
-    for node in nodes:
-        if (isinstance(node, ast.Name) and node.id == root and
-                isinstance(node.ctx, (ast.Store, ast.Del)) and node is not declaration.targets[0]):
+def assigned_target(root, call, tree, nodes, symbols, parents, cache):
+    """Walk original module declarations backward, independently of the detector."""
+    enclosing, ancestor = set(), call
+    while ancestor in parents:
+        ancestor = parents[ancestor]
+        if isinstance(ancestor, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            enclosing.add(ancestor)
+    key = root, frozenset(enclosing)
+    if key in cache:
+        target, capture_position = cache[key]
+        return target if capture_position < (call.lineno, call.col_offset) else None
+    declarations = {}
+    for statement in tree.body:
+        if isinstance(statement, ast.Assign) and len(statement.targets) == 1:
+            destination = statement.targets[0]
+        elif isinstance(statement, ast.AnnAssign):
+            annotation = statement.annotation
+            if (not statement.simple or statement.value is None or
+                    not (isinstance(annotation, ast.Name) or
+                         isinstance(annotation, ast.Constant) and isinstance(annotation.value, str))):
+                continue
+            destination = statement.target
+        else:
+            continue
+        if isinstance(destination, ast.Name):
+            declarations.setdefault(destination.id, []).append((statement, destination))
+
+    seen, reference, first_position = set(), call, None
+    for _ in range(MAX_ALIAS_CAPTURES):
+        matches = declarations.get(root, [])
+        if root in seen or len(matches) != 1 or root not in symbols.get_identifiers():
             return None
-        if isinstance(node, (ast.Global, ast.Nonlocal)) and root in node.names:
+        seen.add(root)
+        declaration, destination = matches[0]
+        if (declaration.lineno, declaration.col_offset) >= (reference.lineno, reference.col_offset):
             return None
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef,
-                             ast.ExceptHandler, ast.MatchAs, ast.MatchStar)) and node.name == root:
+        if first_position is None:
+            first_position = declaration.lineno, declaration.col_offset
+        symbol = symbols.lookup(root)
+        if not symbol.is_assigned() or symbol.is_imported() or symbol.is_namespace():
             return None
-        if isinstance(node, ast.MatchMapping) and node.rest == root:
+        if not module_binding_visible(root, reference, nodes, symbols, parents):
             return None
-        if isinstance(node, (ast.Attribute, ast.Subscript)) and isinstance(node.ctx, (ast.Store, ast.Del)):
-            base = node.value
-            while isinstance(base, (ast.Attribute, ast.Subscript)):
-                base = base.value
-            if isinstance(base, ast.Name) and base.id == root:
+        for node in nodes:
+            if (isinstance(node, ast.Name) and node.id == root and
+                    isinstance(node.ctx, (ast.Store, ast.Del)) and node is not destination):
                 return None
-    value = declaration.value
-    if isinstance(value, ast.Name):
-        original = imported_target(value.id, declaration, tree, nodes, symbols, parents)
-        return original if original in {"subprocess." + name for name in FUNCTIONS} else None
-    if isinstance(value, ast.Attribute) and isinstance(value.value, ast.Name) and value.attr in FUNCTIONS:
-        original = imported_target(value.value.id, declaration, tree, nodes, symbols, parents)
-        return "subprocess." + value.attr if original == "subprocess" else None
+            if isinstance(node, (ast.Global, ast.Nonlocal)) and root in node.names:
+                return None
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef,
+                                 ast.ExceptHandler, ast.MatchAs, ast.MatchStar)) and node.name == root:
+                return None
+            if isinstance(node, ast.MatchMapping) and node.rest == root:
+                return None
+            if isinstance(node, (ast.Attribute, ast.Subscript)) and isinstance(node.ctx, (ast.Store, ast.Del)):
+                base = node.value
+                while isinstance(base, (ast.Attribute, ast.Subscript)):
+                    base = base.value
+                if isinstance(base, ast.Name) and base.id == root:
+                    return None
+        value = declaration.value
+        if isinstance(value, ast.Name):
+            original = imported_target(value.id, declaration, tree, nodes, symbols, parents)
+            if original in {"subprocess." + name for name in FUNCTIONS}:
+                cache[key] = original, first_position
+                return original
+            root, reference = value.id, declaration
+            continue
+        if isinstance(value, ast.Attribute) and isinstance(value.value, ast.Name) and value.attr in FUNCTIONS:
+            original = imported_target(value.value.id, declaration, tree, nodes, symbols, parents)
+            if original == "subprocess":
+                target = "subprocess." + value.attr
+                cache[key] = target, first_position
+                return target
+            return None
+        return None
     return None
 
 
@@ -271,7 +347,7 @@ def verify(payload):
     parents = {child: node for node in nodes for child in ast.iter_child_nodes(node)}
     calls = {(node.lineno, node.col_offset + 1, node.end_lineno, node.end_col_offset + 1): node
              for node in nodes if isinstance(node, ast.Call)}
-    decisions = []
+    decisions, module_capture_cache = [], {}
     for signal in signals:
         position = tuple(signal[key] for key in ("line", "column", "end_line", "end_column"))
         node = calls.get(position)
@@ -282,7 +358,7 @@ def verify(payload):
                     if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name) else None)
             target = (function_import_target(root, node, parents, nodes, symbols) or
                       imported_target(root, node, tree, nodes, symbols, parents) or
-                      assigned_target(root, node, tree, nodes, symbols, parents) or
+                      assigned_target(root, node, tree, nodes, symbols, parents, module_capture_cache) or
                       function_assigned_target(root, node, tree, nodes, symbols, parents)) if root else None
             if target is None:
                 result, reason = "inconclusive", "binding_not_established"

@@ -41,9 +41,9 @@ def test_local_alias_pipeline_preserves_canonical_call_and_parameter(function, s
               f"    runner = {value}\n    copy = command\n    return runner(copy, shell=True)\n").encode()
     report = scan_source_bytes("function-alias.py", source)
     assert len(report.signals) == 1 and report.signals[0].call == "subprocess." + function
-    assert report.detector_version == "1.4"
+    assert report.detector_version == "1.8"
     review = review_original_source(report, source)
-    assert review.verifier_version == "1.4" and review.decisions[0].result == "pattern_reproduced"
+    assert review.verifier_version == "1.8" and review.decisions[0].result == "pattern_reproduced"
     investigation = investigate_argument(report, source, review)
     assert investigation.investigator_version == investigation.verifier_version == "1.2"
     trace = investigation.traces[0]
@@ -155,14 +155,14 @@ def test_cli_api_recovery_and_human_context_preserve_evidence_boundaries(tmp_pat
     created = CliRunner().invoke(app, ["scan", "local-alias.py", "--format", "json"])
     assert created.exit_code == 0, created.output
     initial = json.loads(created.stdout)
-    assert initial["report"]["detector_version"] == "1.4" and len(initial["report"]["signals"]) == 1
+    assert initial["report"]["detector_version"] == "1.8" and len(initial["report"]["signals"]) == 1
     identity, key = initial["id"], uuid4()
 
     async def exercise():
         async with AsyncClient(transport=ASGITransport(app=create_app(database_path=database)), base_url="http://test") as client:
             headers = {"Content-Type": "application/octet-stream"}
             checked = await client.post(f"/v1/local-scans/{identity}/verify?submission_id={uuid4()}", content=source, headers=headers)
-            assert checked.status_code == 200 and checked.json()["review"]["verifier_version"] == "1.4"
+            assert checked.status_code == 200 and checked.json()["review"]["verifier_version"] == "1.8"
             traced = await client.post(f"/v1/local-scans/{identity}/trace?submission_id={key}", content=source, headers=headers)
             assert traced.status_code == 200 and traced.json()["revision"] == 3
             answered = await client.post(f"/v1/local-scans/{identity}/answers", json={

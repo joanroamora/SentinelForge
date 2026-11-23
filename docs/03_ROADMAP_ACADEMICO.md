@@ -104,3 +104,47 @@ El evaluador 1.1 añade [selección de corpus y un desafío de 20 casos](19_CORP
 ## Avance local: alias dentro de funciones (21 nov 2026)
 
 El [motor 1.4 y los trazadores 1.2](20_ALIAS_LOCALES_DE_FUNCIONES.md) reconocen una captura directa del callable dentro de su función, la corroboran con tablas de símbolos y conservan el recorrido del argumento en los casos admitidos. Sobre los mismos corpus, challenge pasa de 7/13 a 9/13 señales y recorridos coincidentes, y baseline mantiene 19/19 con cuatro inconclusos. Quedan cuatro omisiones de desafío. Se conservan historia, contratos y SQLite 7. La suite local registra 513 pruebas aprobadas, dos omisiones de Windows y Ruff limpio; los corpus siguen siendo sintéticos y sin auditoría independiente.
+
+## Integración y avance local: ámbitos independientes (21 nov 2026)
+
+El PR #5 quedó integrado en `dev` mediante `2f0c241`. Su [CI del commit ad9ff04](https://github.com/joanroamora/SentinelForge/actions/runs/44975193972) aprobó Linux/Windows con Python 3.11 y 3.14.10; esa ejecución corresponde al motor 1.4.
+
+La siguiente iteración local, en `codex/unrelated-local-bindings`, añade el [motor 1.5](21_ASIGNACIONES_EN_FUNCIONES_INDEPENDIENTES.md): distingue asignaciones simples de funciones independientes al resolver imports de módulo y refuerza el corroborador ante comprensiones que ocultan nombres. Sobre los corpus intactos, challenge pasa de 9/13 a 10/13 señales y recorridos coincidentes; baseline mantiene 19/19 y cuatro inconclusos, sin pérdidas observadas. Quedan cadenas de alias, capturas anotadas e import condicional. La suite local registra 563 pruebas aprobadas, dos omisiones de Windows y Ruff limpio. SQLite 7, contratos e historia se conservan; esta iteración todavía no tiene commit, publicación ni CI remota.
+
+## Avance local: capturas anotadas de módulo (21 nov 2026)
+
+El [motor 1.6](22_ALIAS_ANOTADOS_DE_MODULO.md) reconoce `runner: object = subprocess.run` y capturas equivalentes admitidas en el módulo, con corroboración separada y sin evaluar la anotación. Challenge pasa de 10/13 a 11/13 señales y recorridos coincidentes sobre las mismas referencias; baseline conserva 19/19, incluidos cuatro inconclusos. Quedan `two-hop-module-alias` y `constant-true-conditional-import`. No se amplían capturas anotadas locales ni expresiones de anotación opacas.
+
+La suite local registra 628 pruebas aprobadas, dos omisiones de Windows y Ruff limpio. Los trazadores siguen en 1.2, el evaluador en 1.1 y SQLite en 7. La aplicación recargada anuncia 1.6 y conserva la huella del expediente histórico consultado. La rama `codex/annotated-module-aliases` conserva también la capa 1.5, todavía sin commits ni publicación de estas dos iteraciones. La CI remota de 1.6 y la auditoría independiente de las referencias siguen pendientes.
+
+## Avance local: cadenas de alias de módulo (21 nov 2026)
+
+El [motor 1.7](23_CADENAS_DE_ALIAS_DE_MODULO.md) reconoce hasta ocho capturas de callable en módulo, con propagación hacia adelante en el detector y reconstrucción hacia atrás en el corroborador. Mantiene comprobaciones por enlace y distingue el ámbito de captura del de la llamada. Una caché de pruebas positivas por fuente y ámbito evita repetir el trabajo para cien señales sin aumentar el timeout.
+
+Sobre los corpus intactos, challenge pasa de 11/13 a 12/13 señales y recorridos coincidentes; baseline conserva 19/19 y cuatro inconclusos. Queda `constant-true-conditional-import` como única omisión del desafío, sin afirmar cobertura general. La suite final registra 700 pruebas aprobadas, dos omisiones de Windows, una advertencia de Pydantic en una prueba concurrente existente y Ruff limpio. SQLite 7, trazadores 1.2, evaluador 1.1 e historia se conservan. Las capas 1.5–1.7 siguen locales en `codex/module-alias-chains`, sin commits ni publicación; falta CI remota de estas capas y auditoría independiente de las referencias.
+
+## Avance local: imports constantes de módulo (22 nov 2026)
+
+El [motor 1.8](24_IMPORTS_CONSTANTES_DE_MODULO.md) admite imports en un `if True` directo del módulo, sin `else` y formado solo por imports. El corroborador contrasta la ubicación de la declaración y rechaza también imports competidores fuera del alcance admitido; una prueba con señal inventada detectó esa carencia previa.
+
+Sobre los corpus intactos, challenge pasa de 12/13 a 13/13 señales y recorridos coincidentes; baseline conserva 19/19 y cuatro inconclusos. Las omisiones de esos dos conjuntos quedan resueltas sin reetiquetar ni cambiar categorías. Las 759 pruebas locales pasan, con dos omisiones de Windows y Ruff limpio. SQLite 7, trazadores 1.2 y evaluador 1.1 se conservan, incluida una frontera inconclusa de trazado local por atributo desde el nuevo import.
+
+La aplicación anuncia 1.8 y conserva la huella del expediente histórico consultado. Las capas 1.5–1.8 siguen locales, sin commits ni publicación, en `codex/constant-true-module-imports`. Completar estos casos sintéticos de desarrollo no acredita calidad general: la próxima decisión debe priorizar consolidación y CI remota, revisión independiente de referencias y casos nuevos antes de atribuir cobertura en proyectos reales. El wheel y la auditoría independiente continúan pendientes.
+
+## Avance local: consolidación y evidencia de calidad (22 nov 2026)
+
+La [capa de consolidación](25_CONSOLIDACION_LOCAL.md) añade un comando que exige
+la `.venv` del repositorio y ejecuta Ruff, la suite y ambas evaluaciones CLI.
+Guarda evidencia en una carpeta nueva ignorada por Git, valida identidades y
+consistencia de los reportes y compara las fuentes al inicio y al final. Fallos,
+errores técnicos y cambios observados bloquean el gate; los pasos pendientes
+quedan explícitos. La matriz CI existente reutiliza este comando.
+
+La ejecución completa registra 789 pruebas aprobadas, 2 omitidas por Windows y
+Ruff limpio. Baseline conserva 19/19 señales y cuatro trazados inconclusos;
+challenge conserva 13/13. Las referencias y el motor 1.8 mantienen sus huellas.
+Las capas 1.5–1.8 y esta validación se agrupan en `codex/local-quality-gate`.
+No se añadieron instalaciones, migraciones o recursos cloud. Quedan publicación
+y CI remota, construcción del wheel, revisión externa de etiquetas y evaluación
+con casos reservados representativos. El gate es evidencia local de integración,
+no una auditoría independiente ni una nueva capacidad de detección.

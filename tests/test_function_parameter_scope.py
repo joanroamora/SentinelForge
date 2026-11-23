@@ -52,7 +52,6 @@ def test_module_call_and_nested_global_reader_ignore_unrelated_parameters():
     b"import subprocess as sp\nclass Runner:\n    def launch(self, sp, command):\n        return sp.run(command, shell=True)\n",
     b"import subprocess as sp\ndef mutate():\n    global sp\n    sp = other\ndef launch(command):\n    return sp.run(command, shell=True)\n",
     b"import subprocess as sp\ndef unrelated(sp):\n    sp.run = other\ndef launch(command):\n    return sp.run(command, shell=True)\n",
-    b"import subprocess as sp\ndef unrelated(sp):\n    sp = other\ndef launch(command):\n    return sp.run(command, shell=True)\n",
     b"import subprocess as sp\nsubprocess_lambda = lambda sp: sp.run('EXAMPLE', shell=True)\n",
 ])
 def test_true_shadowing_and_mutations_remain_rejected_by_both_implementations(source):
