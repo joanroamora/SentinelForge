@@ -82,6 +82,28 @@ anterior seguían registrando 0.1.0. La caché local de wheels estaba vacía y
 esta ejecución comprobó el código con las dependencias existentes. Quedó
 pendiente construir e instalar un wheel real para obtener su recibo.
 
+## Resultado de la instalación del 23 de noviembre de 2026
+
+Con autorización para descargar dependencias desde PyPI, se construyó el wheel
+del commit `0b0a88d` y se instaló en un entorno limpio bajo `.local/`, en
+Windows con Python 3.14.10. El comando terminó con código 0 y `pip check`
+confirmó que las dependencias instaladas son compatibles.
+
+Los 31 archivos instalados coincidieron byte por byte con las fuentes del
+proyecto, incluidos los cuatro recursos de la web y los dos corpus. La
+distribución, el módulo importado y OpenAPI anunciaron 0.2.0. La CLI instalada
+completó los 28 casos de `baseline` y los 20 de `challenge`.
+
+La carpeta `.local/packaging/20261123T231458Z-261b8a99/` conserva
+`sentinelforge-0.2.0-py3-none-any.whl` (91 559 bytes), los logs y
+`receipt.json`. La huella SHA-256 del wheel conservado, la del recibo y la
+registrada por pip coinciden en
+`5a9cbc2f983715c47287988da583cb43479fb0bada7951de7f4548ccff7306e3`.
+
+El entorno de prueba se retiró al terminar. La instalación editable de
+desarrollo conserva sus metadatos anteriores. La comprobación del wheel en
+Linux y con Python 3.11 sigue pendiente.
+
 ## Alcance y nota académica
 
 El comprobador admite la distribución de SentinelForge construida desde este

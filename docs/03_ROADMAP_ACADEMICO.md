@@ -192,5 +192,8 @@ de distribución declarados. La revisión independiente de las etiquetas de
 evaluación continúa pendiente de un conjunto aportado por un revisor.
 
 La validación del checkout aprobó 868 pruebas con 2 omitidas y Ruff limpio.
-La copia temporal reprodujo los 31 archivos del paquete. La instalación del
-wheel queda pendiente de la autorización para obtener las dependencias.
+La [instalación del wheel 0.2.0](27_VALIDACION_DEL_PAQUETE.md) pasó en Windows
+con Python 3.14.10. Sus 31 archivos coincidieron con las fuentes, OpenAPI
+anunció la versión esperada y la CLI instalada completó 28 casos de base y 20
+de desafío. El recibo local identifica el archivo exacto que se probó. Queda
+pendiente repetir la prueba de distribución en Linux y con Python 3.11.
