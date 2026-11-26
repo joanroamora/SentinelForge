@@ -1,4 +1,4 @@
-"""Bounded reads of one explicitly selected local Python source file.
+"""Bounded reads of explicitly selected Python sources and evaluation JSON.
 
 These checks are defensive intake validation, not an OS filesystem sandbox.
 Windows cannot apply openat/O_NOFOLLOW to every ancestor through this API;
@@ -25,7 +25,7 @@ class LocalSourceError(ValueError):
         super().__init__(code)
 
 
-def _relative_parts(relative_path: str) -> tuple[str, ...]:
+def _relative_parts(relative_path: str, suffix: str = ".py") -> tuple[str, ...]:
     if not isinstance(relative_path, str) or not relative_path or len(relative_path) > 1024:
         raise LocalSourceError("source_path_invalid")
     normalized = relative_path.replace("\\", "/")
@@ -45,7 +45,7 @@ def _relative_parts(relative_path: str) -> tuple[str, ...]:
         for part in parts
     ):
         raise LocalSourceError("source_path_invalid")
-    if PurePosixPath(parts[-1]).suffix.lower() != ".py":
+    if PurePosixPath(parts[-1]).suffix.lower() != suffix:
         raise LocalSourceError("unsupported_file_type")
     return parts
 
@@ -88,9 +88,10 @@ def normalize_source_label(relative_path: str) -> str:
     return "/".join(_relative_parts(relative_path))
 
 
-def load_local_source(root: Path, relative_path: str) -> tuple[str, bytes]:
-    """Return a relative POSIX label and bytes, without importing their code."""
-    parts = _relative_parts(relative_path)
+def _load_local_data(root: Path, relative_path: str, *, suffix: str,
+                     max_bytes: int) -> tuple[str, bytes]:
+    """Use trusted adapter limits; apply identical path/open guards to selected data."""
+    parts = _relative_parts(relative_path, suffix)
     authorized_root, directories = _checked_root(root)
     candidate = authorized_root
     try:
@@ -113,7 +114,7 @@ def load_local_source(root: Path, relative_path: str) -> tuple[str, bytes]:
         raise LocalSourceError("source_read_failed") from error
 
     before = _signature(metadata)
-    if metadata.st_size > MAX_SOURCE_BYTES:
+    if metadata.st_size > max_bytes:
         raise LocalSourceError("source_too_large")
     flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
     flags |= getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
@@ -127,7 +128,7 @@ def load_local_source(root: Path, relative_path: str) -> tuple[str, bytes]:
         if not stat.S_ISREG(opened.st_mode) or _signature(opened) != before:
             raise LocalSourceError("source_changed")
         chunks: list[bytes] = []
-        remaining = MAX_SOURCE_BYTES + 1
+        remaining = max_bytes + 1
         while remaining:
             chunk = os.read(descriptor, remaining)
             if not chunk:
@@ -135,7 +136,7 @@ def load_local_source(root: Path, relative_path: str) -> tuple[str, bytes]:
             chunks.append(chunk)
             remaining -= len(chunk)
         data = b"".join(chunks)
-        if len(data) > MAX_SOURCE_BYTES:
+        if len(data) > max_bytes:
             raise LocalSourceError("source_too_large")
         if _signature(os.fstat(descriptor)) != before:
             raise LocalSourceError("source_changed")
@@ -154,3 +155,8 @@ def load_local_source(root: Path, relative_path: str) -> tuple[str, bytes]:
     finally:
         os.close(descriptor)
     return "/".join(parts), data
+
+
+def load_local_source(root: Path, relative_path: str) -> tuple[str, bytes]:
+    """Return one .py of up to 64 KiB without importing its code."""
+    return _load_local_data(root, relative_path, suffix=".py", max_bytes=MAX_SOURCE_BYTES)

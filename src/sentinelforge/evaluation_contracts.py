@@ -3,8 +3,9 @@
 from datetime import UTC, datetime
 from enum import Enum
 from typing import Literal, Self
+from unicodedata import category
 
-from pydantic import AwareDatetime, Field, model_validator
+from pydantic import AwareDatetime, Field, field_validator, model_validator
 
 from .argument_lineage import ArgumentTrace, SourceSpan, TraceStep
 from .contracts import Contract
@@ -69,9 +70,11 @@ class EvaluationCase(Contract):
         return self
 
 
-class EvaluationCorpus(Contract):
+class ReferenceCorpus(Contract):
+    """Shared case invariants; concrete intake types constrain their own identities."""
+
     schema_version: Literal["1.0"] = "1.0"
-    id: Literal["sf-py-001-local", "sf-py-001-challenge"] = "sf-py-001-local"
+    id: str
     version: Literal["1.0"] = "1.0"
     reference_method: Literal["authored_static_expectations"] = "authored_static_expectations"
     reference_review: Literal["not_independently_audited"] = "not_independently_audited"
@@ -82,6 +85,32 @@ class EvaluationCorpus(Contract):
         if len({case.id for case in self.cases}) != len(self.cases):
             raise ValueError("evaluation_duplicate_case")
         return self
+
+
+class EvaluationCorpus(ReferenceCorpus):
+    id: Literal["sf-py-001-local", "sf-py-001-challenge"] = "sf-py-001-local"
+
+
+class DeclaredReferenceProvenance(Contract):
+    actor: str = Field(min_length=1, max_length=120)
+    role: str = Field(min_length=1, max_length=80)
+    reference: str = Field(min_length=1, max_length=200)
+    created_at: AwareDatetime
+    authorship_status: Literal["declared_not_authenticated"] = "declared_not_authenticated"
+    effect: Literal["benchmark_references_only"] = "benchmark_references_only"
+
+    @field_validator("actor", "role", "reference")
+    @classmethod
+    def visible_metadata(cls, value: str) -> str:
+        if not value.strip() or any(category(char) in {"Cc", "Cf", "Cs"} for char in value):
+            raise ValueError("evaluation_invalid_provenance")
+        return value
+
+
+class ExternalEvaluationCorpus(ReferenceCorpus):
+    id: str = Field(pattern=r"^external-[a-z][a-z0-9-]{0,70}$")
+    corpus_type: Literal["external_synthetic"]
+    provenance: DeclaredReferenceProvenance
 
 
 class TargetEvaluation(Contract):
@@ -184,6 +213,36 @@ class EvaluationReport(Contract):
         "Un resultado inconcluso puede coincidir con la referencia y sigue sin demostrar seguridad.",
         "Los tiempos incluyen procesos Python y excluyen casos no iniciados; una ejecución por caso, sin garantía de rendimiento.",
     ])
+
+
+class ExternalEvaluationReceipt(Contract):
+    schema_version: Literal["1.0"] = "1.0"
+    report_type: Literal["external_reference_evaluation"] = "external_reference_evaluation"
+    source_retained: Literal[False] = False
+    source_label: str = Field(min_length=1, max_length=1024)
+    input_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    input_size_bytes: int = Field(ge=1, le=524288)
+    provenance: DeclaredReferenceProvenance
+    acceptance_scope: Literal["all_references"] = "all_references"
+    acceptance: Literal["pass", "fail", "error"]
+    reference_failures: list[str] = Field(max_length=64)
+    evaluation: EvaluationReport
+    limitations: list[str] = Field(default_factory=lambda: [
+        "Referencias sintéticas aportadas como datos locales; no equivalen a una auditoría independiente.",
+        "Autoría, rol, fecha y procedencia son declaraciones no autenticadas.",
+        "La política externa exige coincidencia con todas las referencias, incluidas las fronteras.",
+        "Coincidir con etiquetas recibidas no confirma su corrección ni la seguridad del código.",
+    ])
+
+    @model_validator(mode="after")
+    def acceptance_consistency(self) -> Self:
+        failures = [case.id for case in self.evaluation.cases if not case.reference_match]
+        acceptance = ("error" if self.evaluation.status == "PARTIAL"
+                      or self.evaluation.acceptance == "error" else "fail" if failures else "pass")
+        if (not self.evaluation.corpus_id.startswith("external-") or not self.evaluation.cases
+                or self.reference_failures != failures or self.acceptance != acceptance):
+            raise ValueError("evaluation_external_acceptance_mismatch")
+        return self
 
 
 def observed_reference(signal: LocalScanSignal) -> SignalReference:

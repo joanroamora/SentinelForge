@@ -59,6 +59,10 @@ Un flujo vertical demostrable: un proyecto Python de prueba es recibido por CLI 
 - [Cadenas de alias de módulo: motor 1.7](docs/23_CADENAS_DE_ALIAS_DE_MODULO.md)
 - [Imports constantes de módulo: motor 1.8](docs/24_IMPORTS_CONSTANTES_DE_MODULO.md)
 - [Consolidación local: validación y evidencia](docs/25_CONSOLIDACION_LOCAL.md)
+- [Referencias externas locales y procedencia declarada](docs/26_REFERENCIAS_EXTERNAS.md)
+- [Probar el paquete instalable en un entorno limpio](docs/27_VALIDACION_DEL_PAQUETE.md)
+- [ADR 0021: referencias externas locales](docs/adr/0021-referencias-externas-locales.md)
+- [ADR 0020: validación local y evidencia](docs/adr/0020-validacion-local-y-evidencia.md)
 - [ADR 0019: imports constantes de módulo](docs/adr/0019-imports-constantes-de-modulo.md)
 - [ADR 0018: cadenas acotadas de alias de módulo](docs/adr/0018-cadenas-acotadas-de-alias-de-modulo.md)
 - [ADR 0017: alias anotados de módulo](docs/adr/0017-alias-anotados-de-modulo.md)
@@ -130,6 +134,19 @@ La CI usa el mismo comando en su matriz existente. Esta evidencia local no
 acredita una ejecución remota, construcción del wheel ni auditoría independiente.
 No instala dependencias ni publica cambios. Consulta [alcance, códigos de salida
 y límites](docs/25_CONSOLIDACION_LOCAL.md).
+
+## Comparar referencias aportadas localmente
+
+```powershell
+.\.venv\Scripts\python.exe -m sentinelforge.cli --no-animation evaluate-file tests/fixtures/evaluation/external_reference.json --format pretty
+```
+
+`evaluate-file` acepta un corpus sintético JSON local de hasta 512 KiB con
+identidad propia y procedencia declarada. Usa el mismo motor y exige coincidencia
+de todas las referencias, incluidas fronteras. La autoría sigue sin autenticar y
+las etiquetas sin auditoría independiente; el ejemplo solo demuestra el formato.
+No ejecuta las fuentes ni crea expedientes. Consulta [contrato, códigos de salida
+y límites](docs/26_REFERENCIAS_EXTERNAS.md).
 
 ## Ejecutar la demo local
 

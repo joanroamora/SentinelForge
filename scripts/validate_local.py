@@ -45,8 +45,8 @@ def require_repo_venv(root: Path) -> None:
 
 def source_digest(root: Path) -> str:
     """Fingerprint product, tests, configuration and this gate; exclude generated files."""
-    files = [root / "pyproject.toml", root / "scripts/validate_local.py"]
-    for folder in ("src/sentinelforge", "tests", ".github/workflows"):
+    files = [root / "pyproject.toml"]
+    for folder in ("src/sentinelforge", "scripts", "tests", ".github/workflows"):
         files.extend(path for path in (root / folder).rglob("*")
                      if path.is_file() and "__pycache__" not in path.parts
                      and path.suffix not in {".pyc", ".pyo"})

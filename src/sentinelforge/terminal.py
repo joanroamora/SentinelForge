@@ -65,6 +65,19 @@ def emit(value, output: OutputFormat = OutputFormat.auto) -> None:
     show_logo(term)
     term.print(Text(" SENTINELFORGE  /  LOCAL WORKSPACE", style="bold cyan"))
     term.print(Text(" Evidencia antes que opinión.\n", style="dim"))
+    external = isinstance(data, dict) and data.get("report_type") == "external_reference_evaluation"
+    if external:
+        provenance = data["provenance"]
+        origin = Table.grid(padding=(0, 3)); origin.add_column(style="dim"); origin.add_column(overflow="fold")
+        origin.add_row("Archivo", safe_text(data["source_label"]))
+        origin.add_row("Autor / rol declarados", safe_text(provenance["actor"] + " / " + provenance["role"]))
+        origin.add_row("Procedencia declarada", safe_text(provenance["reference"]))
+        origin.add_row("Fecha declarada", provenance["created_at"])
+        origin.add_row("Verificación", "Autoría no autenticada · referencias sin auditoría independiente")
+        origin.add_row("Política", "Coincidencia de todas las referencias, incluidas las fronteras")
+        origin.add_row("Huella del archivo", data["input_sha256"])
+        term.print(Panel(origin, title="Referencias externas · entrada local", border_style="cyan"))
+        data = {**data["evaluation"], "acceptance": data["acceptance"]}
     if isinstance(data, list) and all(isinstance(item, dict) and "report" in item for item in data):
         table = Table(box=box.SIMPLE_HEAVY, expand=True, header_style="bold cyan")
         for column in ("Expediente", "Archivo", "Señales", "Estado", "Rev."):
@@ -81,8 +94,8 @@ def emit(value, output: OutputFormat = OutputFormat.auto) -> None:
         info = Table.grid(padding=(0, 3)); info.add_column(style="dim"); info.add_column(overflow="fold")
         info.add_row("Corpus", f"{data['corpus_id']} · {data['corpus_version']} · {len(data['cases'])} casos")
         info.add_row("Referencias", "Sintéticas · sin auditoría independiente")
-        info.add_row("Resultado", {"pass": "Referencias en alcance coincidentes",
-                                   "fail": "Discrepancias en referencias en alcance",
+        info.add_row("Resultado", {"pass": "Todas las referencias coinciden" if external else "Referencias en alcance coincidentes",
+                                   "fail": "Discrepancias en las referencias" if external else "Discrepancias en referencias en alcance",
                                    "error": "Evaluación incompleta por error técnico"}[data["acceptance"]])
         info.add_row("Errores esperados", f"{data['expected_error_matches']} / {data['groups']['input_error']['cases']}")
         info.add_row("Tiempo", f"{data['elapsed_ms'] / 1000:.2f} s · p50 {milliseconds(data['case_latency_p50_ms'])} · p95 {milliseconds(data['case_latency_p95_ms'])}")

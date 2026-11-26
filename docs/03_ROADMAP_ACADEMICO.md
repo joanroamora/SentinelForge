@@ -148,3 +148,52 @@ No se añadieron instalaciones, migraciones o recursos cloud. Quedan publicació
 y CI remota, construcción del wheel, revisión externa de etiquetas y evaluación
 con casos reservados representativos. El gate es evidencia local de integración,
 no una auditoría independiente ni una nueva capacidad de detección.
+
+## Avance local: preparación de referencias externas (23 nov 2026)
+
+El PR #6 quedó integrado en `dev` mediante `6e2b3a2`; su
+[CI del commit 4eca847](https://github.com/joanroamora/SentinelForge/actions/runs/45265555387)
+aprobó las cuatro combinaciones Linux/Windows con Python 3.11 y 3.14.10.
+
+La [capa de referencias externas](26_REFERENCIAS_EXTERNAS.md), en
+`codex/external-reference-evaluation`, permite aportar un JSON local limitado,
+con identidad separada y procedencia declarada, y compararlo con el motor actual.
+El recibo distingue el resultado global de todas las referencias de la política
+histórica del benchmark incorporado. No se permite declarar auditoría o autoría
+verificadas desde el archivo. Se conservan corpus, etiquetas, detector 1.8,
+trazadores 1.2, evaluador 1.1 y SQLite 7.
+
+Esto prepara la recepción de casos nuevos: la revisión externa y un conjunto
+reservado representativo aún deben aportarse y verificarse. No se atribuye
+independencia al ejemplo de formato ni se amplían reglas o proyectos completos.
+La construcción del wheel permanece pendiente. No se instalan dependencias,
+se publican cambios o se crean recursos cloud durante esta iteración local.
+
+La validación final registra 845 pruebas aprobadas, dos omisiones de Windows y
+Ruff limpio, con 56 casos de prueba nuevos. Baseline conserva 19/19 señales y
+cuatro inconclusos; challenge conserva 13/13. Se mantienen sus hashes originales
+y la huella de fuentes coincide al inicio y al final del gate. La CLI JSON,
+terminal y ayuda funcionan con la fixture de protocolo; esta fixture no es una
+evaluación externa independiente. La publicación y CI remota de esta capa siguen
+pendientes.
+
+## Avance local — preparar la prueba de distribución (23 nov 2026)
+
+La [prueba del wheel](27_VALIDACION_DEL_PAQUETE.md) permite construir el paquete
+e instalarlo en un entorno temporal dentro del repositorio. Comprueba los
+archivos entregados, la procedencia del módulo, la versión de OpenAPI y el uso
+de los corpus desde el comando instalado. Su ejecución requiere autorización
+para instalar las dependencias. La prueba habitual del código sigue disponible
+con la `.venv` existente.
+
+Al preparar esta capa se corrigió la versión que devolvía el módulo Python.
+El código y OpenAPI anuncian 0.2.0 y una prueba los contrasta con los metadatos
+de distribución declarados. La revisión independiente de las etiquetas de
+evaluación continúa pendiente de un conjunto aportado por un revisor.
+
+La validación del checkout aprobó 868 pruebas con 2 omitidas y Ruff limpio.
+La [instalación del wheel 0.2.0](27_VALIDACION_DEL_PAQUETE.md) pasó en Windows
+con Python 3.14.10. Sus 31 archivos coincidieron con las fuentes, OpenAPI
+anunció la versión esperada y la CLI instalada completó 28 casos de base y 20
+de desafío. El recibo local identifica el archivo exacto que se probó. Queda
+pendiente repetir la prueba de distribución en Linux y con Python 3.11.

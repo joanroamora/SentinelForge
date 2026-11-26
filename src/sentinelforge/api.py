@@ -11,6 +11,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 
+from . import __version__
 from .argument_lineage import ArgumentInvestigationReceipt, LineageError
 from .contracts import AnalysisReport, DemoRevisionRequest, ReportRevision
 from .local_source import MAX_SOURCE_BYTES, LocalSourceError, normalize_source_label
@@ -34,7 +35,7 @@ def create_app(
     *,
     database_path: str | Path | None = None,
 ) -> FastAPI:
-    app = FastAPI(title="SentinelForge · Local workspace", version="0.2.0")
+    app = FastAPI(title="SentinelForge · Local workspace", version=__version__)
     app.state.analysis_service = service or AnalysisService(database_path)
     app.mount("/assets", StaticFiles(directory=Path(__file__).with_name("static")), name="assets")
     scanner_slots = asyncio.Semaphore(2)

@@ -71,8 +71,10 @@ def test_requires_the_repository_venv_before_creating_any_evidence(tmp_path, mon
 
 
 def test_fingerprint_tracks_product_tests_configuration_and_gate_not_generated_files(tmp_path):
-    for name in ("src/sentinelforge/worker.py", "tests/case.py", "pyproject.toml",
-                 ".github/workflows/ci.yml", "scripts/validate_local.py"):
+    tracked = ("src/sentinelforge/worker.py", "tests/case.py", "pyproject.toml",
+               ".github/workflows/ci.yml", "scripts/validate_local.py",
+               "scripts/validate_wheel.py", "scripts/check_installed_wheel.py")
+    for name in tracked:
         file = tmp_path / name
         file.parent.mkdir(parents=True, exist_ok=True)
         file.write_bytes(b"original\r\n")
@@ -82,8 +84,7 @@ def test_fingerprint_tracks_product_tests_configuration_and_gate_not_generated_f
     cache.write_bytes(b"not part of source")
     (tmp_path / "pyproject.toml").write_bytes(b"original\n")
     assert gate.source_digest(tmp_path) == before
-    for name in ("src/sentinelforge/worker.py", "tests/case.py", "pyproject.toml",
-                 ".github/workflows/ci.yml", "scripts/validate_local.py"):
+    for name in tracked:
         file = tmp_path / name
         file.write_bytes(b"changed\n")
         assert gate.source_digest(tmp_path) != before
